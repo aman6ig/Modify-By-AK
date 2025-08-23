@@ -11,13 +11,13 @@ module.exports.config = {
   cooldowns: 5
 };
 
-// --- No Prefix Command (listen in chat) ---
+// Auther AK
 module.exports.handleEvent = async function ({ api, event }) {
   try {
     const body = event.body ? event.body.trim() : "";
     if (!body) return;
 
-    // check agar "flash" se start hota hai (case insensitive)
+  
     if (body.toLowerCase().startsWith("flash")) {
       const question = body.slice(5).trim(); // remove "flash"
       if (!question) {
