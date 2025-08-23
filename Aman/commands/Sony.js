@@ -11,7 +11,7 @@ module.exports.config = {
   cooldowns: 5
 };
 
-// Auther AK
+// Auther AK https://www.facebook.com/AK47xk
 module.exports.handleEvent = async function ({ api, event }) {
   try {
     const body = event.body ? event.body.trim() : "";
@@ -45,7 +45,7 @@ module.exports.handleEvent = async function ({ api, event }) {
       }
 
       return api.sendMessage(
-        `⚡ Flash 2.0:\n\n${answer}\n\n— Owner: AK & Bot 🤖`,
+        `⚡ Flash 2.0:\n\n${answer}\n\n— Owner: AK  🤖`,
         event.threadID,
         event.messageID
       );
