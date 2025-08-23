@@ -1,24 +1,51 @@
+const axios = require("axios");
+const fs = require("fs");
+const ytdl = require("ytdl-core"); // YouTube ke liye
+
 module.exports.config = {
-  name: "gpt",
+  name: "load",
   version: "1.0.0",
   hasPermssion: 0,
-  credits: "Aman",
-  description: "Ask ChatGPT anything",
-  commandCategory: "ai",
-  usages: "gpt <question>",
-  cooldowns: 3
+  credits: "Aman Khan",
+  description: "Download video from any link",
+  commandCategory: "tools",
+  usages: "download [url]",
+  cooldowns: 5
 };
 
-const axios = require("axios");
-
 module.exports.run = async function ({ api, event, args }) {
-  const msg = args.join(" ");
-  if (!msg) return api.sendMessage("⚠️ Question likh!", event.threadID, event.messageID);
+  const url = args[0];
+  if (!url) return api.sendMessage("❌ Link do jiska video download karna hai!", event.threadID, event.messageID);
 
   try {
-    const res = await axios.get(`https://api.vihangayt.asia/gpt4?text=${encodeURIComponent(msg)}`);
-    return api.sendMessage("🤖 " + res.data.result, event.threadID, event.messageID);
+    if (ytdl.validateURL(url)) {
+      // YouTube video download
+      const info = await ytdl.getInfo(url);
+      const title = info.videoDetails.title;
+      const file = __dirname + "/cache/video.mp4";
+
+      ytdl(url, { quality: "lowest" })
+        .pipe(fs.createWriteStream(file))
+        .on("finish", () => {
+          api.sendMessage(
+            {
+              body: `✅ Video download complete!\n\n🎬 Title: ${title}`,
+              attachment: fs.createReadStream(file)
+            },
+            event.threadID,
+            () => fs.unlinkSync(file),
+            event.messageID
+          );
+        });
+    } else {
+      // Non-YouTube ke liye 3rd party API
+      const res = await axios.get(`https://api.vreden.my.id/api/download/mediafire?url=${encodeURIComponent(url)}`);
+      if (!res.data || !res.data.result) return api.sendMessage("❌ Ye link support nahi hota!", event.threadID, event.messageID);
+
+      api.sendMessage(`✅ Link fetched!\n\n🔗 ${res.data.result.link}`, event.threadID, event.messageID);
+    }
   } catch (e) {
-    return api.sendMessage("❌ Error: " + e.message, event.threadID, event.messageID);
+    console.error(e);
+    api.sendMessage("❌ Download error!", event.threadID, event.messageID);
   }
 };
