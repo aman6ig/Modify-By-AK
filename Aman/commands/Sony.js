@@ -11,6 +11,7 @@ module.exports.config = {
   cooldowns: 5
 };
 
+//don't change credit fb contact AK47XK 
 module.exports.run = async function ({ api, event, args }) {
   const question = args.join(" ");
   if (!question) {
@@ -43,7 +44,8 @@ module.exports.run = async function ({ api, event, args }) {
         .join("\n");
     }
 
-    api.sendMessage(`⚡ Flash 2.0:\n\n${answer}`, event.threadID, event.messageID);
+    //auther Aman Khan change name reply 
+    api.sendMessage(`⚡ Ai reply:\n\n${answer}`, event.threadID, event.messageID);
   } catch (error) {
     console.error(error.response?.data || error.message);
     api.sendMessage("❌ Flash error!", event.threadID, event.messageID);
