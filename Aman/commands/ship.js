@@ -1,51 +1,53 @@
 const axios = require("axios");
-const fs = require("fs");
-const ytdl = require("ytdl-core"); // YouTube ke liye
 
 module.exports.config = {
-  name: "load",
-  version: "1.0.0",
-  hasPermssion: 0,
-  credits: "Aman Khan",
-  description: "Download video from any link",
-  commandCategory: "tools",
-  usages: "download [url]",
-  cooldowns: 5
+  name: "dl",
+  version: "1.0",
+  hasPermission: 0,
+  credits: "Aman + ChatGPT",
+  description: "Download videos from any link (YouTube + Adult)",
+  commandCategory: "Media",
+  usages: "[url]",
+  cooldowns: 5,
 };
 
 module.exports.run = async function ({ api, event, args }) {
   const url = args[0];
-  if (!url) return api.sendMessage("❌ Link do jiska video download karna hai!", event.threadID, event.messageID);
+  if (!url) return api.sendMessage("⚠️ Please provide a link.", event.threadID, event.messageID);
+
+  const token = "apify_api_eCfbBMUeS3D0z9Xn4cJnnxPy3dMBsV3EUk1T"; // your Apify token
+  const actorId = "apify/website-content-crawler"; // Apify actor for scraping (we can switch to video downloader actors)
 
   try {
-    if (ytdl.validateURL(url)) {
-      // YouTube video download
-      const info = await ytdl.getInfo(url);
-      const title = info.videoDetails.title;
-      const file = __dirname + "/cache/video.mp4";
+    api.sendMessage("⏳ Processing your link, please wait...", event.threadID, event.messageID);
 
-      ytdl(url, { quality: "lowest" })
-        .pipe(fs.createWriteStream(file))
-        .on("finish", () => {
-          api.sendMessage(
-            {
-              body: `✅ Video download complete!\n\n🎬 Title: ${title}`,
-              attachment: fs.createReadStream(file)
-            },
-            event.threadID,
-            () => fs.unlinkSync(file),
-            event.messageID
-          );
-        });
-    } else {
-      // Non-YouTube ke liye 3rd party API
-      const res = await axios.get(`https://api.vreden.my.id/api/download/mediafire?url=${encodeURIComponent(url)}`);
-      if (!res.data || !res.data.result) return api.sendMessage("❌ Ye link support nahi hota!", event.threadID, event.messageID);
+    // Start Apify actor
+    const run = await axios.post(
+      `https://api.apify.com/v2/actor-tasks/${actorId}/runs?token=${token}`,
+      {
+        "startUrls": [{ "url": url }]
+      }
+    );
 
-      api.sendMessage(`✅ Link fetched!\n\n🔗 ${res.data.result.link}`, event.threadID, event.messageID);
+    const runId = run.data.data.id;
+
+    // Poll results
+    let finished = false, resultUrl = "";
+    while (!finished) {
+      const res = await axios.get(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`);
+      const status = res.data.data.status;
+      if (status === "SUCCEEDED") {
+        finished = true;
+        resultUrl = `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${token}`;
+      } else if (status === "FAILED") {
+        return api.sendMessage("❌ Download failed. Unsupported link.", event.threadID, event.messageID);
+      }
+      await new Promise(r => setTimeout(r, 5000));
     }
+
+    api.sendMessage(`✅ Here is your download result:\n${resultUrl}`, event.threadID, event.messageID);
+
   } catch (e) {
-    console.error(e);
-    api.sendMessage("❌ Download error!", event.threadID, event.messageID);
+    api.sendMessage("❌ Error fetching video. Please check the link or try again.", event.threadID, event.messageID);
   }
 };
