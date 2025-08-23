@@ -2,18 +2,21 @@ const axios = require("axios");
 
 module.exports.config = {
   name: "flash",
-  version: "1.0.1",
+  version: "1.0.2",
   hasPermssion: 0,
   credits: "Aman Khan",
-  description: "Google Gemini Flash 2.0 AI",
+  description: "Google Gemini Flash 2.0 AI (No Prefix)",
   commandCategory: "ai",
-  usages: "[question]",
+  usages: "flash [question]",
   cooldowns: 5
 };
 
-//don't change credit fb contact AK47XK 
-module.exports.run = async function ({ api, event, args }) {
-  const question = args.join(" ");
+// No prefix handleEvent
+module.exports.handleEvent = async function ({ api, event }) {
+  const body = event.body ? event.body.trim() : "";
+  if (!body.toLowerCase().startsWith("flash")) return;
+
+  const question = body.slice(5).trim(); // "flash" ke baad ka text
   if (!question) {
     return api.sendMessage("❌ Kuch puchna to likho!", event.threadID, event.messageID);
   }
@@ -36,7 +39,6 @@ module.exports.run = async function ({ api, event, args }) {
       }
     );
 
-    // Response parse karna safe way se
     let answer = "❌ Flash se koi reply nahi mila.";
     if (response.data?.candidates?.[0]?.content?.parts) {
       answer = response.data.candidates[0].content.parts
@@ -44,8 +46,7 @@ module.exports.run = async function ({ api, event, args }) {
         .join("\n");
     }
 
-    //auther Aman Khan change name reply 
-    api.sendMessage(`⚡ Ai reply:\n\n${answer}`, event.threadID, event.messageID);
+    api.sendMessage(`⚡ Flash 2.0:\n\n${answer}\n\n— owner Ak`, event.threadID, event.messageID);
   } catch (error) {
     console.error(error.response?.data || error.message);
     api.sendMessage("❌ Flash error!", event.threadID, event.messageID);
