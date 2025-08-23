@@ -1,42 +1,41 @@
+const axios = require("axios");
+
 module.exports.config = {
-  name: "ship",
+  name: "fbprofile",
   version: "1.0.0",
   hasPermssion: 0,
-  credits: "Aman",
-  description: "Calculates love percentage between two names.",
-  commandCategory: "fun",
-  usages: ".ship [name1] | [name2]",
-  cooldowns: 10
+  credits: "YourName",
+  description: "Get Facebook profile info",
+  commandCategory: "social",
+  usages: "[username]",
+  cooldowns: 5
 };
 
 module.exports.run = async function({ api, event, args }) {
-  const { threadID, messageID } = event;
-  const text = args.join(" ");
-  
-  if (!text.includes("|")) {
-    return api.sendMessage("गलत format! Aise likhein: .ship [naam1] | [naam2]", threadID, messageID);
+  const username = args[0];
+  if (!username) return api.sendMessage("❌ Facebook username/ID bhejo!", event.threadID, event.messageID);
+
+  try {
+    const response = await axios.get(`https://facebook-profile-info.p.rapidapi.com/profile?username=${username}`, {
+      headers: {
+        'X-RapidAPI-Key': 'your_api_key_here',
+        'X-RapidAPI-Host': 'facebook-profile-info.p.rapidapi.com'
+      }
+    });
+
+    const profile = response.data;
+    const message = `
+📘 Facebook Profile:
+Name: ${profile.name}
+Username: ${profile.username}
+ID: ${profile.id}
+Followers: ${profile.followers}
+Friends: ${profile.friends}
+    `;
+
+    api.sendMessage(message, event.threadID, event.messageID);
+  } catch (error) {
+    console.error(error);
+    api.sendMessage("❌ Profile not found!", event.threadID, event.messageID);
   }
-  
-  const names = text.split("|").map(name => name.trim());
-  const name1 = names[0];
-  const name2 = names[1];
-
-  if (!name1 || !name2) {
-    return api.sendMessage("Dono naam likhna zaroori hai.", threadID, messageID);
-  }
-
-  const percentage = Math.floor(Math.random() * 101);
-  let message;
-
-  if (percentage < 30) {
-    message = `💔 ${name1} aur ${name2} ke beech sirf ${percentage}% pyaar hai. Lagta hai baat nahi banegi.`;
-  } else if (percentage < 60) {
-    message = `🤔 ${name1} aur ${name2} ke beech ${percentage}% pyaar hai. Thodi koshish aur karni padegi!`;
-  } else if (percentage < 90) {
-    message = `🥰 ${name1} aur ${name2} ke beech ${percentage}% pyaar hai. Kamaal ki jodi hai!`;
-  } else {
-    message = `💖 ${name1} aur ${name2} ke beech ${percentage}% pyaar hai! Rab Ne Bana Di Jodi! ✨`;
-  }
-
-  api.sendMessage(message, threadID, messageID);
 };
