@@ -39,22 +39,21 @@ module.exports.handleEvent = async function ({ api, event }) {
         finalMessage = `Previous message: ${repliedMessage} | User's reply: ${body}`;
       }
 
-      // API call with context
+      // API call with context → hit render endpoint
       const res = await axios.post("https://r1-2wfy.onrender.com/aman", {
         message: finalMessage
       });
 
-      if (!res.data || !res.data.reply) {
-        return api.sendMessage("⚠️ sony ne sahi reply nahi diya.", threadID, messageID);
-      }
+      // Response handling
+      const botReply = res.data?.reply || "⚠️ sony ne sahi reply nahi diya.";
 
       // Final message format
-      const finalMsg = `👤 ${userName}\n\n${res.data.reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
+      const finalMsg = `👤 ${userName}\n\n${botReply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
       return api.sendMessage(finalMsg, threadID, messageID);
 
     } catch (error) {
-      console.error("Gemini API error:", error.message);
+      console.error("API error:", error.response?.data || error.message);
 
       // Multiple funny/romantic error messages
       const errorMessages = [
@@ -72,7 +71,6 @@ module.exports.handleEvent = async function ({ api, event }) {
       ];
 
       const randomMsg = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-
       return api.sendMessage(randomMsg, threadID, messageID);
     }
   }
