@@ -25,7 +25,7 @@ module.exports.handleEvent = async function ({ api, event }) {
   if (hasTriggerWords || isReplyToBot) {
     try {
       // Reaction 🥰
-      api.setMessageReaction("🥰", messageID, (err) => {}, true);
+      api.setMessageReaction("🥰", messageID, () => {}, true);
 
       // Sender name fetch
       const userInfo = await api.getUserInfo(senderID);
@@ -50,7 +50,11 @@ module.exports.handleEvent = async function ({ api, event }) {
       // Final message format
       const finalMsg = `👤 ${userName}\n\n${botReply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
-      return api.sendMessage(finalMsg, threadID, messageID);
+      // ✅ Reply properly to user message
+      return api.sendMessage(
+        { body: finalMsg, replyTo: messageID },
+        threadID
+      );
 
     } catch (error) {
       console.error("API error:", error.response?.data || error.message);
@@ -71,7 +75,11 @@ module.exports.handleEvent = async function ({ api, event }) {
       ];
 
       const randomMsg = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-      return api.sendMessage(randomMsg, threadID, messageID);
+
+      return api.sendMessage(
+        { body: randomMsg, replyTo: messageID },
+        threadID
+      );
     }
   }
 };
