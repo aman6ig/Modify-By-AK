@@ -50,11 +50,8 @@ module.exports.handleEvent = async function ({ api, event }) {
       // Final message format
       const finalMsg = `👤 ${userName}\n\n${botReply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
-      // ✅ Reply properly to user message
-      return api.sendMessage(
-        { body: finalMsg, replyTo: messageID },
-        threadID
-      );
+      // ✅ yahi correct hai: reply karne ke liye 3rd param me messageID do
+      return api.sendMessage(finalMsg, threadID, messageID);
 
     } catch (error) {
       console.error("API error:", error.response?.data || error.message);
@@ -76,10 +73,8 @@ module.exports.handleEvent = async function ({ api, event }) {
 
       const randomMsg = errorMessages[Math.floor(Math.random() * errorMessages.length)];
 
-      return api.sendMessage(
-        { body: randomMsg, replyTo: messageID },
-        threadID
-      );
+      // same fix error ke reply me bhi
+      return api.sendMessage(randomMsg, threadID, messageID);
     }
   }
 };
