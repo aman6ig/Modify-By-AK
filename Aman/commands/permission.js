@@ -3,7 +3,7 @@ const path = require("path");
 
 const threadFile = path.join(__dirname, "..", "cache", "thread.json");
 
-// thread.json file ensure
+// thread.json ensure
 if (!fs.existsSync(threadFile)) {
   fs.writeFileSync(threadFile, JSON.stringify({ allowed: [] }, null, 2));
 }
@@ -18,8 +18,8 @@ function saveData(data) {
 
 module.exports.config = {
   name: "permission",
-  version: "1.0.0",
-  hasPermssion: 2, // only ADMINBOT
+  version: "1.0.1",
+  hasPermssion: 0, // sab use kar sakte (request ke liye)
   credits: "Aman Khan",
   description: "Approval system for bot",
   commandCategory: "system",
@@ -27,22 +27,25 @@ module.exports.config = {
   cooldowns: 5
 };
 
-// 🔥 sabhi command aur event ke liye yeh check chalega
+// 🔥 sabhi group me block system
 module.exports.handleEvent = function({ api, event }) {
   try {
     const { threadID, senderID, body } = event;
     const config = require("../../config.json");
     const admins = config.ADMINBOT || [];
 
+    // owner aur unke commands free rahenge
+    if (admins.includes(senderID)) return;
+    if (body && body.startsWith(config.PREFIX + "permission")) return;
+    if (body && body.startsWith(config.PREFIX + "approval")) return;
+
     const data = getData();
     if (!data.allowed.includes(threadID)) {
-      // agar admin hai to block na ho
-      if (!admins.includes(senderID)) {
-        return api.sendMessage(
-          "❌ Aapke group me bot ki permission nahi hai.\nPehle owner se permission lein: www.facebook.com/Ak47xK",
-          threadID
-        );
-      }
+      return api.sendMessage(
+        "❌ Aapke group me bot ki permission nahi hai.\n" +
+        "Pehle owner se permission lein: www.facebook.com/Ak47xK",
+        threadID
+      );
     }
   } catch (e) {
     console.error(e);
@@ -54,22 +57,24 @@ module.exports.run = function({ api, event, args }) {
   const config = require("../../config.json");
   const admins = config.ADMINBOT || [];
 
-  if (!admins.includes(senderID)) {
-    return api.sendMessage("❌ Sirf owner is command ka use kar sakta hai.", threadID);
-  }
-
   const data = getData();
   const cmd = args[0];
 
-  // /approval (group se request owner ko jaye)
-  if (cmd === "request" || cmd === "approval") {
+  // 📨 /approval -> request owner ke paas
+  if (cmd === "approval" || cmd === "request") {
     return api.sendMessage(
-      `📩 Group ID: ${threadID}\nNe approval request bheji hai.\nAllow karne ke liye: /permission ${threadID}`,
-      admins[0] // first owner ko bhejenge
+      `📩 Group ID: ${threadID}\nNe approval request bheji hai.\n` +
+      `Allow karne ke liye: ${config.PREFIX}permission allow ${threadID}`,
+      admins[0] // first owner ko send
     );
   }
 
-  // /permission <threadID>
+  // ✅ Sirf owner allowed hai baaki commands ke liye
+  if (!admins.includes(senderID)) {
+    return api.sendMessage("❌ Ye command sirf owner ke liye hai.", threadID);
+  }
+
+  // /permission allow <threadID>
   if (cmd === "allow" || cmd === "permission") {
     const id = args[1] || threadID;
     if (!data.allowed.includes(id)) {
@@ -79,7 +84,7 @@ module.exports.run = function({ api, event, args }) {
     return api.sendMessage(`✅ Group ${id} ko ab allowed kar diya gaya hai.`, threadID);
   }
 
-  // /block <threadID>
+  // /permission block <threadID>
   if (cmd === "block") {
     const id = args[1] || threadID;
     data.allowed = data.allowed.filter(g => g !== id);
