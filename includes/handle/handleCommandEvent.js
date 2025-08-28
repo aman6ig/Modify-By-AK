@@ -1,5 +1,13 @@
 module.exports = function ({ api, models, Users, Threads, Currencies }) {
     const logger = require("../../utils/log.js");
+    const fs = require("fs");
+    const approvalPath = __dirname + "/../../commands/cache/thread.json";
+
+    function loadApproval() {
+        if (!fs.existsSync(approvalPath)) return { approved: [], banned: [] };
+        return JSON.parse(fs.readFileSync(approvalPath, "utf8"));
+    }
+
     return function ({ event }) {
         const { allowInbox } = global.config;
         const { userBanned, threadBanned } = global.data;
@@ -7,6 +15,19 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         var { senderID, threadID } = event;
         senderID = String(senderID);
         threadID = String(threadID);
+
+        // 🔹 Approval check
+        const approvalData = loadApproval();
+        if (!approvalData.approved.includes(threadID) && !global.config.ADMINBOT.includes(senderID)) {
+            return api.sendMessage(
+                "⚠️ Ye group abhi approved nahi hai.\n📌 Use command: /approval request\nContact owner for approval.",
+                threadID
+            );
+        }
+        if (approvalData.banned.includes(threadID)) {
+            return api.sendMessage("⛔ Ye group banned hai. Contact owner.", threadID);
+        }
+
         if (userBanned.has(senderID) || threadBanned.has(threadID) || (allowInbox == false && senderID == threadID)) return;
         for (const eventReg of eventRegistered) {
             const cmd = commands.get(eventReg);
