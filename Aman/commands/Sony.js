@@ -40,7 +40,7 @@ api.setMessageReaction("🥰", messageID, (err) => {}, true);
   }  
 
   // API call with context  
-  const res = await axios.post("https://api-zd2s.onrender.com/gemini", {  
+  const res = await axios.post("https://r1-2wfy.onrender.com/aman", {  
     message: finalMessage  
   });  
 
