@@ -25,19 +25,19 @@ module.exports.handleEvent = async function ({ api, event }) {
     const userName = userInfo[senderID]?.name || "User";
 
     // Random mood select
-    const moods = ["romantic", "funny", "attitude", "naughty"];
+    const moods = ["Roasting", "funny", "attitude", "naughty", "sad", "romantic"];
     const mood = moods[Math.floor(Math.random() * moods.length)];
 
     let prompt;
 
     if (isEmojiOnly) {
       prompt = `User ne sirf emoji bheje hain: "${body}". 
-Un emojis ko feel karke ek ladki "${mood}" mood me natural reply kare. 
-AI jaisa mat lagna, emojis zaroor use karo.`;
+Un emojis ko use krke emoji ke according  "${mood}" mood me natural reply kare. 
+AI jaisa Nhi Real girl ki tarah ho Jiyada bada Nhi Only short reply and intresting ho, emojis zaroor use karo.`;
     } else if (lowerBody.includes("naina")) {
       prompt = `Tum ek ladki ho jiska naam "Naina" hai aur tum abhi "${mood}" mood me ho. 
 User ka msg: "${body}". 
-Human style me jawab do, thoda natural aur filmy touch ke sath. Emojis zaroor use karo.`;
+Human girl style me jawab do real insan ki tarah , thoda natural aur filmy touch ke sath. Emojis zaroor use karo.`;
     } else {
       return; // ignore
     }
