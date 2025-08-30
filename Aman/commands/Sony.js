@@ -42,7 +42,7 @@ module.exports.handleEvent = async function ({ api, event }) {
       // If replying to Sony bot's message, include context
       if (isReplyToSonyBot && messageReply) {
         const repliedMessage = messageReply.body || "";
-        finalMessage = `Previous message: ${repliedMessage} | User's reply: ${body}`;
+        finalMessage = `👩‍🦰 SONY said:\n"${repliedMessage}"\n\n👤 ${userName} replied:\n"${body}"`;
       }
 
       // API call with context
@@ -54,8 +54,8 @@ module.exports.handleEvent = async function ({ api, event }) {
         return api.sendMessage("⚠️ sony ne sahi reply nahi diya.", threadID, messageID);
       }
 
-      // Final message format
-      const finalMsg = `👤 ${userName}\n\n${res.data.reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
+      // Final message format (clear Sony ka reply)
+      const finalMsg = `👤 ${userName}:\n"${body}"\n\n👩‍🦰 SONY:\n${res.data.reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
       return api.sendMessage(finalMsg, threadID, messageID);
     } catch (error) {
