@@ -2,10 +2,10 @@ const axios = require("axios");
 
 module.exports.config = {
   name: "sony",
-  version: "1.0.2",
+  version: "1.0.3",
   hasPermssion: 0,
   credits: "Aman",
-  description: "Gemini chatbot with sony/bot trigger and reply context",
+  description: "Gemini + Pollinations chatbot with sony/bot/emoji trigger and reply context",
   commandCategory: "no prefix",
   usages: "no prefix",
   cooldowns: 2
@@ -17,6 +17,7 @@ module.exports.handleEvent = async function ({ api, event }) {
   if (!body || senderID == api.getCurrentUserID()) return;
 
   const lowerBody = body.toLowerCase();
+  const isEmojiOnly = /^[\p{Emoji}\s]+$/u.test(body.trim());
 
   // Trigger words check
   const hasTriggerWords = lowerBody.includes("sony") || lowerBody.includes("bot");
@@ -28,7 +29,7 @@ module.exports.handleEvent = async function ({ api, event }) {
     messageReply.body &&
     messageReply.body.includes("★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊"); // unique tag Sony msg ka
 
-  if (hasTriggerWords || isReplyToSonyBot) {
+  if (hasTriggerWords || isReplyToSonyBot || isEmojiOnly) {
     try {
       // Reaction 🥰
       api.setMessageReaction("🥰", messageID, (err) => {}, true);
@@ -38,30 +39,54 @@ module.exports.handleEvent = async function ({ api, event }) {
       const userName = userInfo[senderID]?.name || "User";
 
       let finalMessage = body;
+      let reply;
 
-      // If replying to Sony bot's message, include context
+      // If replying to Sony bot's message → Render with context
       if (isReplyToSonyBot && messageReply) {
         const repliedMessage = messageReply.body || "";
         finalMessage = `Previous message: ${repliedMessage} | User's reply: ${body}`;
+
+        const res = await axios.post("https://api-zd2s.onrender.com/gemini", {
+          message: finalMessage
+        });
+        reply = res.data?.reply;
+      }
+      // Emoji only → Pollinations
+      else if (isEmojiOnly) {
+        const moods = ["romantic", "funny", "attitude", "naughty", "angery", "Roasting", "Friendly", "full Roasting", "sad", "broken"];
+        const mood = moods[Math.floor(Math.random() * moods.length)];
+        const prompt = `User ne sirf emojis bheje hain: "${body}". Ek Real Ladki Ki Tarah "${mood}" mood me natural style reply de Emoji kr according ho reply short ho jiyada bada Nhi Ho Ai ki tarah real girl ki tarah reply dena hai short me , emojis ke sath.`;
+
+        const encoded = encodeURIComponent(prompt);
+        const res = await axios.get(`https://text.pollinations.ai/${encoded}`);
+        reply = typeof res.data === "string" ? res.data.trim() : null;
+      }
+      // Only "bot" → Pollinations
+      else if (lowerBody.includes("bot")) {
+        const prompt = `User ne "bot" bola hai. Ek ladki Ki tarah, cute aur flirty style me jawab do User ko impress krna hai tume Funny Line ya romantic Line bhejo ya Roast kro Hindi language ho type krna English Alphabet me aur ye sb nhi bolna hai Direct reply do faltu ka reply nhi dena ye sb bat ka only user message ka reply do.`;
+        const encoded = encodeURIComponent(prompt);
+        const res = await axios.get(`https://text.pollinations.ai/${encoded}`);
+        reply = typeof res.data === "string" ? res.data.trim() : null;
+      }
+      // Only "sony" → Render
+      else if (lowerBody.includes("sony")) {
+        const res = await axios.post("https://api-zd2s.onrender.com/gemini", {
+          message: body
+        });
+        reply = res.data?.reply;
       }
 
-      // API call with context
-      const res = await axios.post("https://api-zd2s.onrender.com/gemini", {
-        message: finalMessage
-      });
-
-      if (!res.data || !res.data.reply) {
-        return api.sendMessage("⚠️ sony ne sahi reply nahi diya.", threadID, messageID);
+      if (!reply) {
+        reply = "Sony soch rahi hai... tum kaafi interesting ho 💖";
       }
 
       // Final message format
-      const finalMsg = `👤 ${userName}\n\n${res.data.reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
-
+      const finalMsg = `👤 ${userName}\n\n${reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
       return api.sendMessage(finalMsg, threadID, messageID);
     } catch (error) {
-      console.error("Gemini API error:", error.message);
+      console.error("Sony.js error:", error.message);
 
-      // Multiple funny/romantic error messages
+      // Multiple funny/romantic backup messages
       const errorMessages = [
         "Tum online ho aur reply nahi dete, dil todna bhi ek art hai kya 😏",
         "Mujhe tumse ek complaint hai... tum cute itne kyu ho 🥺💖",
@@ -86,7 +111,6 @@ module.exports.handleEvent = async function ({ api, event }) {
       ];
 
       const randomMsg = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-
       return api.sendMessage(randomMsg, threadID, messageID);
     }
   }
