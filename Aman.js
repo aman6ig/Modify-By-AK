@@ -140,7 +140,20 @@ function onBot({ models: botModel }) {
         if (loginError) return logger(JSON.stringify(loginError), `ERROR`);
         loginApiData.setOptions(global.config.FCAOption)
         writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, '\x09'))
+     function onBot({ models: botModel }) {
+    const loginData = {};
+    loginData['appState'] = appState;
+    login(loginData, async(loginError, loginApiData) => {
+        if (loginError) return logger(JSON.stringify(loginError), `ERROR`);
+        loginApiData.setOptions(global.config.FCAOption)
+        writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, '\x09'))
+        
+        // IMPORTANT: Make API globally accessible
         global.client.api = loginApiData
+        global.api = loginApiData  // Added for groupnamelock command
+        
+        console.log("[SYSTEM] Global API access enabled for commands");
+        
         global.config.version = '1.2.14'
         global.client.timeStart = new Date().getTime(),
             function () {
