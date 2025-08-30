@@ -28,7 +28,7 @@ module.exports.handleEvent = async function ({ api, event }) {
     const userName = userInfo[senderID]?.name || "User";
 
     // Random mood select
-    const moods = ["romantic", "funny", "attitude", "naughty"];
+    const moods = ["romantic", "funny", "attitude", "naughty", "angery", "Flirting", "Funny", "Haha"];
     const mood = moods[Math.floor(Math.random() * moods.length)];
 
     let prompt;
@@ -63,7 +63,8 @@ Human girl style me jawab do, Ek real Girl ki tarah Jb koi Only Bot Bole to Flir
       reply = "Bot soch rahi hai... tum bahut interesting ho 💖";
     }
 
-    const finalMsg = `👤 ${userName}\n\n${reply}`;
+    // 🔥 Owner Name Add kiya gaya
+    const finalMsg = `👤 ${userName}\n\n${reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
     return api.sendMessage(finalMsg, threadID, messageID);
   } catch (error) {
@@ -76,7 +77,7 @@ Human girl style me jawab do, Ek real Girl ki tarah Jb koi Only Bot Bole to Flir
       "Chalo mai tumhe ek smile bhejti hu 🙂✨",
     ];
     const random = backupReplies[Math.floor(Math.random() * backupReplies.length)];
-    return api.sendMessage(random, threadID, messageID);
+    return api.sendMessage(`${random}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`, threadID, messageID);
   }
 };
 
