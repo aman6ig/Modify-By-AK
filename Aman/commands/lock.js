@@ -1,8 +1,8 @@
 module.exports.config = {
     name: "groupnamelock",
     version: "1.0.0",
-    hasPermssion: 2, // 0: Everyone, 1: Group Admin, 2: Bot Admin Only
-    credits: "YourName",
+    hasPermssion: 2, // Only Bot Admin
+    credits: "Aman",
     description: "Lock group name to prevent changes",
     commandCategory: "Admin",
     usages: "[group name to lock]",
@@ -13,7 +13,7 @@ module.exports.config = {
 // Global storage for locked group names
 global.lockedGroupNames = global.lockedGroupNames || {};
 
-module.exports.run = async function({ api, event, args, Threads }) {
+module.exports.run = async function({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
     
     // Load config for bot admin check
@@ -27,8 +27,6 @@ module.exports.run = async function({ api, event, args, Threads }) {
     
     // Check if user is bot admin (from config.json)
     const botAdmins = config.ADMINBOT || [];
-    const threadInfo = await api.getThreadInfo(threadID);
-    const adminIDs = threadInfo.adminIDs.map(admin => admin.id);
     
     // Only bot admin can use this command
     if (!botAdmins.includes(senderID)) {
@@ -64,22 +62,45 @@ module.exports.run = async function({ api, event, args, Threads }) {
     }
 };
 
-module.exports.handleEvent = async function({ api, event, Threads }) {
-    // Multiple event types for group name changes
-    if (event.type !== "log:thread-name" && event.type !== "change_thread_name") return;
-    
+// Handle events for name change detection
+module.exports.handleEvent = async function({ api, event }) {
     const { threadID } = event;
+    
+    // Debug log for all events in locked groups
+    if (threadID && global.lockedGroupNames && global.lockedGroupNames[threadID]) {
+        console.log(`[GroupNameLock] Event in locked group ${threadID}:`, event.type);
+    }
+    
+    // Check multiple event types that indicate group name change
+    const validEventTypes = [
+        "log:thread-name",
+        "change_thread_name", 
+        "log:thread-name-change",
+        "thread-name",
+        "log:subscribe"
+    ];
+    
+    if (!validEventTypes.includes(event.type)) return;
+    
+    // Check if this group has name lock enabled
+    if (!global.lockedGroupNames || !global.lockedGroupNames[threadID]) return;
+    
+    const lockedData = global.lockedGroupNames[threadID];
     let newName;
     
-    // Get the new name from different event structures
-    if (event.logMessageData && event.logMessageData.name) {
-        newName = event.logMessageData.name;
-    } else if (event.logMessageData && event.logMessageData.thread_name) {
-        newName = event.logMessageData.thread_name;
+    // Try to get new name from various event structures
+    if (event.logMessageData) {
+        newName = event.logMessageData.name || 
+                 event.logMessageData.thread_name || 
+                 event.logMessageData.threadName;
     } else if (event.threadName) {
         newName = event.threadName;
-    } else {
-        // If we can't get the new name, fetch current thread info
+    } else if (event.name) {
+        newName = event.name;
+    }
+    
+    // If we still don't have the name, fetch current thread info
+    if (!newName) {
         try {
             const threadInfo = await api.getThreadInfo(threadID);
             newName = threadInfo.threadName || threadInfo.name;
@@ -89,40 +110,82 @@ module.exports.handleEvent = async function({ api, event, Threads }) {
         }
     }
     
-    // Check if this group has name lock enabled
-    if (!global.lockedGroupNames || !global.lockedGroupNames[threadID]) return;
-    
-    const lockedData = global.lockedGroupNames[threadID];
+    console.log(`[GroupNameLock] Detected: "${newName}", Locked: "${lockedData.name}"`);
     
     // If someone changed the name to something different than locked name
-    if (newName !== lockedData.name) {
+    if (newName && newName !== lockedData.name) {
+        console.log(`[GroupNameLock] Reverting name change in ${threadID}`);
+        
         try {
-            console.log(`Group name changed from "${lockedData.name}" to "${newName}", reverting...`);
-            
             // Wait a bit then change back to locked name
             setTimeout(async () => {
                 try {
                     await api.setTitle(lockedData.name, threadID);
+                    console.log("[GroupNameLock] Successfully reverted group name");
                     
                     api.sendMessage(
                         `🔒 Group Name Lock Active!\n\n` +
                         `❌ Name change reject kar diya gaya\n` +
-                        `📝 Original Name: "${lockedData.name}"\n` +
+                        `📝 Locked Name: "${lockedData.name}"\n` +
+                        `🔄 Changed From: "${newName}"\n` +
                         `⚠️ Sirf bot admin "/groupnameunlock" use karke unlock kar sakte hain!`,
                         threadID
                     );
                 } catch (setError) {
-                    console.log("Error setting title back:", setError);
+                    console.log("[GroupNameLock] Error setting title back:", setError);
                     api.sendMessage(
-                        `❌ Group name lock active hai lekin bot ke pass admin permission nahi hai!\n` +
-                        `Bot ko admin banao ya "/groupnameunlock" use karo.`,
+                        `❌ Group name lock active hai lekin bot admin nahi hai!\n` +
+                        `Bot ko group admin banao ya "/groupnameunlock" use karo.`,
                         threadID
                     );
                 }
-            }, 3000);
+            }, 2000);
             
         } catch (error) {
-            console.log("Group name lock error:", error);
+            console.log("[GroupNameLock] Error:", error);
         }
+    }
+};
+
+// Load function with backup checker
+module.exports.onLoad = function() {
+    console.log("[GroupNameLock] Command loaded successfully!");
+    
+    // Set up interval to check group names every 15 seconds (backup method)
+    if (!global.groupNameChecker) {
+        global.groupNameChecker = setInterval(async () => {
+            if (!global.lockedGroupNames || !global.api) return;
+            
+            for (const [threadID, lockedData] of Object.entries(global.lockedGroupNames)) {
+                try {
+                    // Get current thread info
+                    const threadInfo = await global.api.getThreadInfo(threadID);
+                    const currentName = threadInfo.threadName || threadInfo.name;
+                    
+                    if (currentName && currentName !== lockedData.name) {
+                        console.log(`[GroupNameLock] Auto-checker detected mismatch in ${threadID}`);
+                        
+                        // Revert name
+                        await global.api.setTitle(lockedData.name, threadID);
+                        
+                        global.api.sendMessage(
+                            `🔒 Group Name Auto-Protected!\n\n` +
+                            `📝 Locked Name: "${lockedData.name}"\n` +
+                            `⚠️ Automatic protection active!`,
+                            threadID
+                        );
+                    }
+                } catch (error) {
+                    // Silent error - group might be deleted or bot removed
+                    if (error.error === 2 || error.errorCode === 2) {
+                        // Group doesn't exist anymore, remove from locked list
+                        delete global.lockedGroupNames[threadID];
+                        console.log(`[GroupNameLock] Removed deleted group ${threadID} from lock list`);
+                    }
+                }
+            }
+        }, 15000); // Check every 15 seconds
+        
+        console.log("[GroupNameLock] Auto-checker started (15s intervals)");
     }
 };
