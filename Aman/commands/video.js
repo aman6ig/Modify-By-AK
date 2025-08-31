@@ -45,7 +45,7 @@ module.exports = {
       
       const downloadResponse = await axios.get(downloadApiUrl, {
         headers: {
-          'X-RapidAPI-Key': 'your-rapidapi-key', // RapidAPI se key lena padega
+          'X-RapidAPI-Key': 'f1ba9edd09mshf56bd96530aa3c5p10579cjsna561e535e5ae', // RapidAPI se key lena padega
           'X-RapidAPI-Host': 'youtube-downloader8.p.rapidapi.com'
         }
       });
