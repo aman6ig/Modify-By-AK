@@ -1,20 +1,17 @@
 const axios = require("axios");
-const ytdl = require("ytdl-core");
 
 module.exports = {
   config: {
     name: "video",
     version: "1.0.1", 
     hasPermssion: 0,
-    credits: "Aman Khan",
-    description: "Search and send YouTube video directly",
+    credits: "Aman",
+    description: "Search and send YouTube video",
     commandCategory: "Media",
     usages: "[videoName]",
-    cooldowns: 15,
+    cooldowns: 10,
     dependencies: {
-      "axios": "",
-      "ytdl-core": "",
-      "yt-search": ""
+      "axios": ""
     },
   },
 
@@ -33,70 +30,68 @@ module.exports = {
     );
 
     try {
-      // Direct YouTube search
-      const ytSearch = require('yt-search');
-      const searchResults = await ytSearch(videoName);
+      // Use your Render API for search
+      const searchUrl = `https://yt-api-oq4d.onrender.com/api/search?q=${encodeURIComponent(videoName)}`;
+      const searchResponse = await axios.get(searchUrl);
       
-      if (!searchResults.videos.length) {
+      if (!searchResponse.data.success || !searchResponse.data.results.length) {
         throw new Error("No videos found!");
       }
 
-      const video = searchResults.videos[0];
-      const videoUrl = video.url;
+      const video = searchResponse.data.results[0];
       
-      // Get video info
-      const videoInfo = await ytdl.getInfo(videoUrl);
+      // Use third-party API for download (410 error avoid)
+      const downloadApiUrl = `https://youtube-downloader8.p.rapidapi.com/?url=https://www.youtube.com/watch?v=${video.id}`;
       
-      // Get available format
-      const format = ytdl.chooseFormat(videoInfo.formats, {
-        quality: 'lowest', // Pehle lowest try karte hain
-        filter: 'audioandvideo'
+      const downloadResponse = await axios.get(downloadApiUrl, {
+        headers: {
+          'X-RapidAPI-Key': 'your-rapidapi-key', // RapidAPI se key lena padega
+          'X-RapidAPI-Host': 'youtube-downloader8.p.rapidapi.com'
+        }
       });
-      
-      if (!format) {
-        // Agar video format nahi mila toh audio format try karo
-        const audioFormat = ytdl.chooseFormat(videoInfo.formats, {
-          filter: 'audioonly'
-        });
-        if (!audioFormat) throw new Error("No download format available");
+
+      if (!downloadResponse.data || !downloadResponse.data.video) {
+        throw new Error("Download not available");
       }
 
-      const downloadUrl = format.url;
+      const videoUrl = downloadResponse.data.video[0].url; // First quality
       
-      api.setMessageReaction("⏬", event.messageID, () => {}, true);
+      api.setMessageReaction("✅", event.messageID, () => {}, true);
       
-      // Send video with timeout
-      setTimeout(async () => {
-        try {
-          await api.sendMessage(
-            {
-              attachment: await global.utils.getStreamFromURL(downloadUrl),
-              body: `🎬 ${video.title}\n⏰ ${video.duration}\n👁️ ${video.views}\n\n✅ Downloaded successfully`
-            },
-            event.threadID,
-            () => {
-              api.unsendMessage(processingMessage.messageID);
-            }
-          );
-        } catch (sendError) {
-          // Agar video send nahi ho paya toh link bhej do
-          await api.sendMessage(
-            `🎬 ${video.title}\n⏰ ${video.duration}\n\n📥 Download Link: ${video.url}\n\n❌ Video too large, sending link instead.`,
-            event.threadID,
-            () => {
-              api.unsendMessage(processingMessage.messageID);
-            }
-          );
-        }
-      }, 2000);
+      // Send video
+      await api.sendMessage(
+        {
+          attachment: await global.utils.getStreamFromURL(videoUrl),
+          body: `🎬 ${video.title}\n📺 ${video.channel}\n\n✅ Downloaded via YouTube API`
+        },
+        event.threadID,
+        () => {
+          api.unsendMessage(processingMessage.messageID);
+        },
+        event.messageID
+      );
 
     } catch (error) {
       console.error("Video error:", error);
-      api.sendMessage(
-        `❌ Error: ${error.message}`,
-        event.threadID,
-        event.messageID
-      );
+      
+      // Fallback: Send video link only
+      if (searchResponse && searchResponse.data.results.length > 0) {
+        const video = searchResponse.data.results[0];
+        await api.sendMessage(
+          `🎬 ${video.title}\n📺 ${video.channel}\n\n🔗 YouTube Link: https://www.youtube.com/watch?v=${video.id}\n\n❌ Video download failed, but here's the link!`,
+          event.threadID,
+          () => {
+            api.unsendMessage(processingMessage.messageID);
+          },
+          event.messageID
+        );
+      } else {
+        api.sendMessage(
+          `❌ Error: ${error.message}`,
+          event.threadID,
+          event.messageID
+        );
+      }
     }
   }
 };
