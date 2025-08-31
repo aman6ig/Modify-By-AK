@@ -1,5 +1,5 @@
-const fetch = require("node-fetch");
 const axios = require("axios");
+const ytdl = require("ytdl-core");
 const fs = require("fs");
 const path = require("path");
 const ytSearch = require("yt-search");
@@ -10,13 +10,14 @@ module.exports = {
     version: "1.0.1",
     hasPermssion: 0,
     credits: "Aman",
-    description: "Download YouTube video from keyword search",
+    description: "Search and send YouTube video directly",
     commandCategory: "Media",
     usages: "[videoName]",
-    cooldowns: 10,
+    cooldowns: 15,
     dependencies: {
-      "node-fetch": "",
-      "yt-search": "",
+      "axios": "",
+      "ytdl-core": "",
+      "yt-search": ""
     },
   },
 
@@ -26,7 +27,7 @@ module.exports = {
     }
 
     const videoName = args.join(" ");
-
+    
     const processingMessage = await api.sendMessage(
       "🔍 Searching for video...",
       event.threadID,
@@ -35,96 +36,82 @@ module.exports = {
     );
 
     try {
-      // Search for the video on YouTube
+      // Search for video
       const searchResults = await ytSearch(videoName);
-      if (!searchResults || !searchResults.videos.length) {
-        throw new Error("No videos found for your search.");
-      }
-
-      // Get the top result from the search
-      const topResult = searchResults.videos[0];
-      const videoId = topResult.videoId;
-
-      // Use YOUR RENDER API for download information
-      const apiUrl = `https://yt-api-oq4d.onrender.com/api/download?videoId=${videoId}`;
-
-      api.setMessageReaction("⏳", event.messageID, () => {}, true);
-
-      // Get download info from your API
-      const downloadResponse = await axios.get(apiUrl, { timeout: 15000 });
       
-      if (!downloadResponse.data.success) {
-        throw new Error("Download service temporarily unavailable");
+      if (!searchResults.videos.length) {
+        throw new Error("No videos found!");
       }
 
-      const videoInfo = downloadResponse.data.video;
-      const downloadUrl = videoInfo.downloadUrl || videoInfo.watchUrl;
+      const video = searchResults.videos[0];
+      const videoUrl = video.url;
 
-      // Check if download URL is available
-      if (!downloadUrl) {
-        throw new Error("No download URL available");
+      // Get video info
+      const info = await ytdl.getInfo(videoUrl);
+      
+      // Get the best available format
+      const format = ytdl.chooseFormat(info.formats, {
+        quality: 'lowest',
+        filter: 'audioandvideo'
+      });
+
+      if (!format) {
+        throw new Error("No downloadable format found");
       }
 
-      // Set request headers
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate, br',
-      };
+      api.setMessageReaction("⏬", event.messageID, () => {}, true);
 
-      // Try to download the video
-      const response = await fetch(downloadUrl, { headers, timeout: 30000 });
+      // Download and send video
+      const filename = `video_${Date.now()}.mp4`;
+      const filepath = path.join(__dirname, filename);
 
-      if (!response.ok) {
-        throw new Error(`Download failed with status: ${response.status}`);
-      }
+      const stream = ytdl(videoUrl, { format: format });
+      const writeStream = fs.createWriteStream(filepath);
 
-      // Check file size (max 25MB for Messenger)
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength) > 25 * 1024 * 1024) {
-        throw new Error("Video is too large for direct download");
-      }
+      stream.pipe(writeStream);
 
-      // Create safe filename
-      const filename = `video_${videoId}.mp4`;
-      const downloadPath = path.join(__dirname, filename);
+      writeStream.on('finish', async () => {
+        try {
+          await api.sendMessage(
+            {
+              attachment: fs.createReadStream(filepath),
+              body: `🎬 ${video.title}\n⏰ ${video.duration}\n👀 ${video.views}\n\n✅ Video downloaded successfully!`
+            },
+            event.threadID,
+            () => {
+              fs.unlinkSync(filepath);
+              api.unsendMessage(processingMessage.messageID);
+            },
+            event.messageID
+          );
+        } catch (sendError) {
+          console.error("Send error:", sendError);
+          api.sendMessage(
+            `🎬 ${video.title}\n⏰ ${video.duration}\n\n🔗 ${video.url}\n\n❌ Video too large, here's the link!`,
+            event.threadID,
+            () => {
+              fs.unlinkSync(filepath);
+              api.unsendMessage(processingMessage.messageID);
+            },
+            event.messageID
+          );
+        }
+      });
 
-      // Download and save video
-      const videoBuffer = await response.buffer();
-      fs.writeFileSync(downloadPath, videoBuffer);
-
-      api.setMessageReaction("✅", event.messageID, () => {}, true);
-
-      // Send the video
-      await api.sendMessage(
-        {
-          attachment: fs.createReadStream(downloadPath),
-          body: `🎬 ${topResult.title}\n⏰ ${topResult.duration}\n👀 ${topResult.views}\n\n✅ Downloaded successfully!`
-        },
-        event.threadID,
-        () => {
-          // Clean up: delete the temporary file
-          try {
-            fs.unlinkSync(downloadPath);
-          } catch (cleanupError) {
-            console.error("File cleanup error:", cleanupError);
-          }
-          api.unsendMessage(processingMessage.messageID);
-        },
-        event.messageID
-      );
+      writeStream.on('error', (error) => {
+        throw new Error(`Download failed: ${error.message}`);
+      });
 
     } catch (error) {
-      console.error("Video command error:", error.message);
+      console.error("Video error:", error);
       
-      // Fallback: Send video information with link
+      // Fallback to link
       try {
         const searchResults = await ytSearch(videoName);
-        if (searchResults && searchResults.videos.length > 0) {
-          const topResult = searchResults.videos[0];
-          
-          await api.sendMessage(
-            `🎬 ${topResult.title}\n⏰ ${topResult.duration}\n👀 ${topResult.views}\n\n🔗 YouTube Link: ${topResult.url}\n\n❌ Note: ${error.message}`,
+        if (searchResults.videos.length > 0) {
+          const video = searchResults.videos[0];
+          api.sendMessage(
+            `🎬 ${video.title}\n⏰ ${video.duration}\n👀 ${video.views}\n\n🔗 ${video.url}\n\n❌ ${error.message}`,
             event.threadID,
             () => {
               api.unsendMessage(processingMessage.messageID);
@@ -136,11 +123,11 @@ module.exports = {
         }
       } catch (fallbackError) {
         api.sendMessage(
-          `❌ Error: ${error.message}\n\nPlease try again later.`,
+          `❌ Error: ${error.message}`,
           event.threadID,
           event.messageID
         );
       }
     }
-  },
+  }
 };
