@@ -10,16 +10,17 @@ module.exports = {
     description: "Search and send YouTube video directly",
     commandCategory: "Media",
     usages: "[videoName]",
-    cooldowns: 10,
+    cooldowns: 15,
     dependencies: {
       "axios": "",
-      "ytdl-core": ""
+      "ytdl-core": "",
+      "yt-search": ""
     },
   },
 
   run: async function ({ api, event, args }) {
     if (!args[0]) {
-      return api.sendMessage("❌ Please enter video name to search!", event.threadID, event.messageID);
+      return api.sendMessage("❌ Please enter video name!", event.threadID, event.messageID);
     }
 
     const videoName = args.join(" ");
@@ -32,49 +33,67 @@ module.exports = {
     );
 
     try {
-      // Search video using your API
-      const apiUrl = `https://yt-api-oq4d.onrender.com/api/search?q=${encodeURIComponent(videoName)}`;
-      const searchResponse = await axios.get(apiUrl);
+      // Direct YouTube search
+      const ytSearch = require('yt-search');
+      const searchResults = await ytSearch(videoName);
       
-      if (!searchResponse.data.success || !searchResponse.data.results.length) {
-        throw new Error("No videos found for your search.");
+      if (!searchResults.videos.length) {
+        throw new Error("No videos found!");
       }
 
-      const video = searchResponse.data.results[0];
+      const video = searchResults.videos[0];
+      const videoUrl = video.url;
       
-      // Get video info for download
-      const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+      // Get video info
       const videoInfo = await ytdl.getInfo(videoUrl);
       
-      // Get highest quality format
-      const format = ytdl.chooseFormat(videoInfo.formats, { 
-        quality: 'highest',
+      // Get available format
+      const format = ytdl.chooseFormat(videoInfo.formats, {
+        quality: 'lowest', // Pehle lowest try karte hain
         filter: 'audioandvideo'
       });
       
       if (!format) {
-        throw new Error("No suitable format found for download.");
+        // Agar video format nahi mila toh audio format try karo
+        const audioFormat = ytdl.chooseFormat(videoInfo.formats, {
+          filter: 'audioonly'
+        });
+        if (!audioFormat) throw new Error("No download format available");
       }
 
+      const downloadUrl = format.url;
+      
       api.setMessageReaction("⏬", event.messageID, () => {}, true);
       
-      // Send the video directly
-      await api.sendMessage(
-        {
-          attachment: await global.utils.getStreamFromURL(format.url),
-          body: `🎬 **${video.title}**\n📺 Channel: ${video.channel}\n⏰ Duration: ${video.duration || 'N/A'}\n\n✅ Downloaded via YouTube API`
-        },
-        event.threadID,
-        () => {
-          api.unsendMessage(processingMessage.messageID);
-        },
-        event.messageID
-      );
+      // Send video with timeout
+      setTimeout(async () => {
+        try {
+          await api.sendMessage(
+            {
+              attachment: await global.utils.getStreamFromURL(downloadUrl),
+              body: `🎬 ${video.title}\n⏰ ${video.duration}\n👁️ ${video.views}\n\n✅ Downloaded successfully`
+            },
+            event.threadID,
+            () => {
+              api.unsendMessage(processingMessage.messageID);
+            }
+          );
+        } catch (sendError) {
+          // Agar video send nahi ho paya toh link bhej do
+          await api.sendMessage(
+            `🎬 ${video.title}\n⏰ ${video.duration}\n\n📥 Download Link: ${video.url}\n\n❌ Video too large, sending link instead.`,
+            event.threadID,
+            () => {
+              api.unsendMessage(processingMessage.messageID);
+            }
+          );
+        }
+      }, 2000);
 
     } catch (error) {
       console.error("Video error:", error);
       api.sendMessage(
-        `❌ Failed to send video: ${error.message}`,
+        `❌ Error: ${error.message}`,
         event.threadID,
         event.messageID
       );
