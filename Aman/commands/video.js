@@ -1,126 +1,115 @@
+//@aadi-babu3608
+////////////////////////////////////////////////////////
+/////// WARNING => JO CREDIT NAME CHANGE KREGA USKA ID BAN KAR DIYA JAYEGA + THIS BOT IS MADE BT AADI SHRIVTASTAV 
+const fetch = require("node-fetch");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const ytdl = require("ytdl-core");
 const ytSearch = require("yt-search");
 
 module.exports = {
   config: {
     name: "video",
-    version: "2.0.0",
+    version: "1.0.1",
     hasPermssion: 0,
-    credits: "Aman",
-    description: "Download and send YouTube videos directly",
+    credits: "ITZ BROKEN AADI",///don't change my Credit Coz i Edit 
+    description: "Download YouTube song from keyword search and link",
     commandCategory: "Media",
-    usages: "[videoName]",
-    cooldowns: 20,
+    usages: "[songName] [type]",
+    cooldowns: 5,
     dependencies: {
-      "axios": "",
-      "ytdl-core": "",
+      "node-fetch": "",
       "yt-search": "",
-      "fs": "",
-      "path": ""
     },
   },
 
   run: async function ({ api, event, args }) {
-    if (!args[0]) {
-      return api.sendMessage("❌ Please enter video name!", event.threadID, event.messageID);
+    let songName, type;
+
+    if (
+      args.length > 1 &&
+      (args[args.length - 1] === "audio" || args[args.length - 1] === "video")
+    ) {
+      type = args.pop();
+      songName = args.join(" ");
+    } else {
+      songName = args.join(" ");
+      type = "audio";
     }
 
-    const videoName = args.join(" ");
-    
     const processingMessage = await api.sendMessage(
-      "🔍 Searching for video... Please wait ⏳",
+      "✅ Processing your request. Please wait...",
       event.threadID,
       null,
       event.messageID
     );
 
     try {
-      // Step 1: Search YouTube
-      const searchResults = await ytSearch(videoName);
-      
-      if (!searchResults.videos.length) {
-        throw new Error("No videos found for: " + videoName);
+      // Search for the song on YouTube
+      const searchResults = await ytSearch(songName);
+      if (!searchResults || !searchResults.videos.length) {
+        throw new Error("No results found for your search query.");
       }
 
-      const video = searchResults.videos[0];
-      const videoUrl = video.url;
+      // Get the top result from the search
+      const topResult = searchResults.videos[0];
+      const videoId = topResult.videoId;
 
-      api.sendMessage(
-        `🎬 Found: ${video.title}\n⏰ Duration: ${video.duration}\n⬇️ Downloading...`,
+      // Construct API URL for downloading the top result
+      const apiKey = "priyansh-here";
+      const apiUrl = `https://yt-api-oq4d.onrender.com/api/search?id=${videoId}&type=${type}&apikey=${apiKey}`;
+
+      api.setMessageReaction("⌛", event.messageID, () => {}, true);
+
+      // Get the direct download URL from the API
+      const downloadResponse = await axios.get(apiUrl);
+      const downloadUrl = downloadResponse.data.downloadUrl;
+
+      // Set request headers
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://cnvmp3.com/',
+        'Cookie': '_ga=GA1.1.1062081074.1735238555; _ga_MF283RRQCW=GS1.1.1735238554.1.1.1735239728.0.0.0',
+      };
+
+      const response = await fetch(downloadUrl, { headers });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch song. Status code: ${response.status}`);
+      }
+
+      // Set the filename based on the song title and type
+      const filename = `${topResult.title}.${type === "audio" ? "mp3" : "mp4"}`;
+      const downloadPath = path.join(__dirname, filename);
+
+      const songBuffer = await response.buffer();
+
+      // Save the song file locally
+      fs.writeFileSync(downloadPath, songBuffer);
+
+      api.setMessageReaction("✅", event.messageID, () => {}, true);
+
+      await api.sendMessage(
+        {
+          attachment: fs.createReadStream(downloadPath),
+          body: `🖤 Title: ${topResult.title}\n\n Here is your ${type === "audio" ? "audio" : "video"} 🎧:`,
+        },
         event.threadID,
-        null,
+        () => {
+          fs.unlinkSync(downloadPath);
+          api.unsendMessage(processingMessage.messageID);
+        },
         event.messageID
       );
-
-      // Step 2: Download using ytdl-core
-      const filename = `video_${Date.now()}.mp4`;
-      const filepath = path.join(__dirname, cache);
-
-      return new Promise((resolve, reject) => {
-        const stream = ytdl(videoUrl, {
-          quality: 'lowest',
-          filter: 'audioandvideo'
-        });
-
-        stream.pipe(fs.createWriteStream(filepath));
-
-        stream.on('end', async () => {
-          try {
-            // Step 3: Send video
-            await api.sendMessage(
-              {
-                attachment: fs.createReadStream(filepath),
-                body: `🎥 ${video.title}\n⏰ ${video.duration}\n👀 ${video.views}\n\n✅ Downloaded successfully!`
-              },
-              event.threadID,
-              (err) => {
-                // Cleanup
-                try {
-                  fs.unlinkSync(filepath);
-                } catch (e) {}
-                api.unsendMessage(processingMessage.messageID);
-                if (err) reject(err);
-                else resolve();
-              }
-            );
-          } catch (sendError) {
-            reject(sendError);
-          }
-        });
-
-        stream.on('error', (error) => {
-          reject(new Error(`Download failed: ${error.message}`));
-        });
-      });
-
     } catch (error) {
-      console.error("Video error:", error);
-      
-      // Fallback: Send video link
-      try {
-        const searchResults = await ytSearch(videoName);
-        if (searchResults.videos.length > 0) {
-          const video = searchResults.videos[0];
-          api.sendMessage(
-            `🎬 ${video.title}\n⏰ ${video.duration}\n👀 ${video.views}\n\n🔗 ${video.url}\n\n❌ Download failed: ${error.message}`,
-            event.threadID,
-            () => {
-              api.unsendMessage(processingMessage.messageID);
-            }
-          );
-        }
-      } catch (fallbackError) {
-        api.sendMessage(
-          `❌ Error: ${error.message}`,
-          event.threadID,
-          () => {
-            api.unsendMessage(processingMessage.messageID);
-          }
-        );
-      }
+      console.error(`Failed to download and send song: ${error.message}`);
+      api.sendMessage(
+        `Failed to download song: ${error.message}`,
+        event.threadID,
+        event.messageID
+      );
     }
-  }
+  },
 };
