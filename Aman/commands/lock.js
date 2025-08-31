@@ -467,4 +467,40 @@ module.exports.onLoad = function() {
                                     threadID
                                 );
                             } catch (setError) {
-                                console.log(`[Gro
+                                console.log(`[GroupLock] Auto-correct failed for ${threadID}:`, setError);
+                            }
+                        }
+                    }
+                    
+                    // Check member names with enhanced detection
+                    if (locks.members) {
+                        for (const [userID, originalName] of Object.entries(locks.members)) {
+                            const userInfo = threadInfo.userInfo.find(u => u.id === userID);
+                            if (userInfo && userInfo.name !== originalName) {
+                                console.log(`[GroupLock] Auto-correcting nickname for ${userID}`);
+                                
+                                try {
+                                    await global.api.changeNickname(originalName, threadID, userID);
+                                    console.log(`[GroupLock] Nickname auto-corrected for ${userID}`);
+                                } catch (nickError) {
+                                    console.log(`[GroupLock] Nickname auto-correct failed:`, nickError);
+                                }
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    // Handle deleted groups
+                    if (error.error === 2 || error.errorCode === 2 || error.message?.includes('does not exist')) {
+                        console.log(`[GroupLock] Removing deleted group ${threadID} from locks`);
+                        delete global.groupLocks[threadID];
+                    } else {
+                        console.log(`[GroupLock] Auto-checker error for ${threadID}:`, error.message);
+                    }
+                }
+            }
+        }, 25000); // Check every 25 seconds - optimized timing
+        
+        console.log("[GroupLock] Enhanced auto-protection checker started (25s intervals)!");
+    }
+};
