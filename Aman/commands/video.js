@@ -1,17 +1,22 @@
+const fetch = require("node-fetch");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+const ytSearch = require("yt-search");
 
 module.exports = {
   config: {
     name: "video",
-    version: "1.0.1", 
+    version: "1.0.1",
     hasPermssion: 0,
     credits: "Aman",
-    description: "Search and send YouTube video",
+    description: "Download YouTube video from keyword search",
     commandCategory: "Media",
     usages: "[videoName]",
-    cooldowns: 10,
+    cooldowns: 5,
     dependencies: {
-      "axios": ""
+      "node-fetch": "",
+      "yt-search": "",
     },
   },
 
@@ -21,77 +26,83 @@ module.exports = {
     }
 
     const videoName = args.join(" ");
-    
+    const type = "video"; // Always video for this command
+
     const processingMessage = await api.sendMessage(
-      "🔍 Searching for video...",
+      "✅ Processing your video request. Please wait...",
       event.threadID,
       null,
       event.messageID
     );
 
     try {
-      // Use your Render API for search
-      const searchUrl = `https://yt-api-oq4d.onrender.com/api/search?q=${encodeURIComponent(videoName)}`;
-      const searchResponse = await axios.get(searchUrl);
-      
-      if (!searchResponse.data.success || !searchResponse.data.results.length) {
-        throw new Error("No videos found!");
+      // Search for the video on YouTube
+      const searchResults = await ytSearch(videoName);
+      if (!searchResults || !searchResults.videos.length) {
+        throw new Error("No results found for your search query.");
       }
 
-      const video = searchResponse.data.results[0];
-      
-      // Use third-party API for download (410 error avoid)
-      const downloadApiUrl = `https://youtube-downloader8.p.rapidapi.com/?url=https://www.youtube.com/watch?v=${video.id}`;
-      
-      const downloadResponse = await axios.get(downloadApiUrl, {
-        headers: {
-          'X-RapidAPI-Key': 'f1ba9edd09mshf56bd96530aa3c5p10579cjsna561e535e5ae', // RapidAPI se key lena padega
-          'X-RapidAPI-Host': 'youtube-downloader8.p.rapidapi.com'
-        }
-      });
+      // Get the top result from the search
+      const topResult = searchResults.videos[0];
+      const videoId = topResult.videoId;
 
-      if (!downloadResponse.data || !downloadResponse.data.video) {
-        throw new Error("Download not available");
+      // Construct API URL for downloading using YOUR RENDER API
+      const apiUrl = `https://yt-api-oq4d.onrender.com/api/download?videoId=${videoId}`;
+
+      api.setMessageReaction("⌛", event.messageID, () => {}, true);
+
+      // Get the direct download URL from your API
+      const downloadResponse = await axios.get(apiUrl);
+      
+      if (!downloadResponse.data || !downloadResponse.data.downloadUrl) {
+        throw new Error("Download not available from API");
       }
 
-      const videoUrl = downloadResponse.data.video[0].url; // First quality
-      
+      const downloadUrl = downloadResponse.data.downloadUrl;
+
+      // Set request headers
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+      };
+
+      const response = await fetch(downloadUrl, { headers });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video. Status code: ${response.status}`);
+      }
+
+      // Set the filename based on the video title
+      const filename = `${topResult.title}.mp4`;
+      const downloadPath = path.join(__dirname, filename);
+
+      const videoBuffer = await response.buffer();
+
+      // Save the video file locally
+      fs.writeFileSync(downloadPath, videoBuffer);
+
       api.setMessageReaction("✅", event.messageID, () => {}, true);
-      
-      // Send video
+
       await api.sendMessage(
         {
-          attachment: await global.utils.getStreamFromURL(videoUrl),
-          body: `🎬 ${video.title}\n📺 ${video.channel}\n\n✅ Downloaded via YouTube API`
+          attachment: fs.createReadStream(downloadPath),
+          body: `🎬 Title: ${topResult.title}\n⏰ Duration: ${topResult.duration}\n👀 Views: ${topResult.views}\n\nHere is your video 🎥:`,
         },
         event.threadID,
         () => {
+          fs.unlinkSync(downloadPath);
           api.unsendMessage(processingMessage.messageID);
         },
         event.messageID
       );
-
     } catch (error) {
-      console.error("Video error:", error);
-      
-      // Fallback: Send video link only
-      if (searchResponse && searchResponse.data.results.length > 0) {
-        const video = searchResponse.data.results[0];
-        await api.sendMessage(
-          `🎬 ${video.title}\n📺 ${video.channel}\n\n🔗 YouTube Link: https://www.youtube.com/watch?v=${video.id}\n\n❌ Video download failed, but here's the link!`,
-          event.threadID,
-          () => {
-            api.unsendMessage(processingMessage.messageID);
-          },
-          event.messageID
-        );
-      } else {
-        api.sendMessage(
-          `❌ Error: ${error.message}`,
-          event.threadID,
-          event.messageID
-        );
-      }
+      console.error(`Failed to download and send video: ${error.message}`);
+      api.sendMessage(
+        `Failed to download video: ${error.message}`,
+        event.threadID,
+        event.messageID
+      );
     }
-  }
+  },
 };
