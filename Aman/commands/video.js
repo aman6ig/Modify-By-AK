@@ -6,7 +6,7 @@ module.exports = {
     name: "video",
     version: "1.0.1", 
     hasPermssion: 0,
-    credits: "Aman",
+    credits: "Aman Khan",
     description: "Search and send YouTube video directly",
     commandCategory: "Media",
     usages: "[videoName]",
