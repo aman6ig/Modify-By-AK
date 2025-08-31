@@ -47,7 +47,7 @@ module.exports = {
       const videoId = topResult.videoId;
 
       // Construct API URL for downloading using YOUR RENDER API
-      const apiUrl = `https://yt-api-oq4d.onrender.com/api/download?videoId=${videoId}`;
+      const apiUrl = `https://yt-api-oq4d.onrender.com/aman/search?videoId=${videoId}`;
 
       api.setMessageReaction("⌛", event.messageID, () => {}, true);
 
