@@ -1,4 +1,5 @@
 const axios = require("axios");
+const ytdl = require("ytdl-core");
 
 module.exports = {
   config: {
@@ -6,12 +7,13 @@ module.exports = {
     version: "1.0.1", 
     hasPermssion: 0,
     credits: "Aman",
-    description: "Download YouTube video from search",
+    description: "Search and send YouTube video directly",
     commandCategory: "Media",
     usages: "[videoName]",
-    cooldowns: 5,
+    cooldowns: 10,
     dependencies: {
-      "axios": ""
+      "axios": "",
+      "ytdl-core": ""
     },
   },
 
@@ -23,16 +25,15 @@ module.exports = {
     const videoName = args.join(" ");
     
     const processingMessage = await api.sendMessage(
-      "✅ Searching for video. Please wait...",
+      "🔍 Searching for video...",
       event.threadID,
       null,
       event.messageID
     );
 
     try {
-      // Use your Render API
+      // Search video using your API
       const apiUrl = `https://yt-api-oq4d.onrender.com/api/search?q=${encodeURIComponent(videoName)}`;
-      
       const searchResponse = await axios.get(apiUrl);
       
       if (!searchResponse.data.success || !searchResponse.data.results.length) {
@@ -41,11 +42,28 @@ module.exports = {
 
       const video = searchResponse.data.results[0];
       
-      api.setMessageReaction("✅", event.messageID, () => {}, true);
+      // Get video info for download
+      const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+      const videoInfo = await ytdl.getInfo(videoUrl);
+      
+      // Get highest quality format
+      const format = ytdl.chooseFormat(videoInfo.formats, { 
+        quality: 'highest',
+        filter: 'audioandvideo'
+      });
+      
+      if (!format) {
+        throw new Error("No suitable format found for download.");
+      }
 
-      // Send video information with download link
+      api.setMessageReaction("⏬", event.messageID, () => {}, true);
+      
+      // Send the video directly
       await api.sendMessage(
-        `🎬 **Title:** ${video.title}\n📺 **Channel:** ${video.channel}\n⏰ **Duration:** ${video.duration || 'N/A'}\n\n🔗 **Download:** https://www.youtube.com/watch?v=${video.id}\n\nUse "/video download ${video.id}" to get direct download link`,
+        {
+          attachment: await global.utils.getStreamFromURL(format.url),
+          body: `🎬 **${video.title}**\n📺 Channel: ${video.channel}\n⏰ Duration: ${video.duration || 'N/A'}\n\n✅ Downloaded via YouTube API`
+        },
         event.threadID,
         () => {
           api.unsendMessage(processingMessage.messageID);
@@ -54,9 +72,9 @@ module.exports = {
       );
 
     } catch (error) {
-      console.error("Video search error:", error);
+      console.error("Video error:", error);
       api.sendMessage(
-        `❌ Failed to search video: ${error.message}`,
+        `❌ Failed to send video: ${error.message}`,
         event.threadID,
         event.messageID
       );
