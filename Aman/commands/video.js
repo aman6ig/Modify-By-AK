@@ -63,7 +63,7 @@ module.exports = {
 
       // Download and send video
       const filename = `video_${Date.now()}.mp4`;
-      const filepath = path.join(__dirname, filename);
+      const filepath = path.join(__dirname, cache);
 
       const stream = ytdl(videoUrl, { format: format });
       const writeStream = fs.createWriteStream(filepath);
