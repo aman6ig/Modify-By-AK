@@ -67,6 +67,9 @@ global.moduleData = new Array();
 
 global.language = new Object();
 
+// Initialize Group Protection System
+global.groupLocks = global.groupLocks || {};
+
 // Add missing checkBan function
 async function checkBan(api) {
     try {
@@ -148,6 +151,185 @@ catch {
     var appState = [];
 }
 
+//========= Group Protection Event Handler =========//
+async function handleGroupProtectionEvents(api, message) {
+    const { threadID, type, logMessageData, author } = message;
+    
+    if (!global.groupLocks || !global.groupLocks[threadID]) return;
+    
+    const locks = global.groupLocks[threadID];
+    
+    console.log(`[GroupProtection] Event: ${type} in thread: ${threadID}`);
+    
+    try {
+        // Handle Group Name Changes
+        const nameChangeEvents = [
+            "log:thread-name",
+            "change_thread_name", 
+            "log:thread-name-change",
+            "thread-name"
+        ];
+        
+        if (nameChangeEvents.includes(type) && locks.name) {
+            let newName = null;
+            
+            // Extract new name from different event structures
+            if (logMessageData) {
+                newName = logMessageData.name || 
+                         logMessageData.thread_name || 
+                         logMessageData.threadName ||
+                         logMessageData.new_name;
+            }
+            
+            // If name extraction failed, fetch current thread info
+            if (!newName) {
+                try {
+                    const threadInfo = await api.getThreadInfo(threadID);
+                    newName = threadInfo.threadName || threadInfo.name;
+                } catch (err) {
+                    console.log(`[GroupProtection] Failed to get thread info: ${err.message}`);
+                    return;
+                }
+            }
+            
+            console.log(`[GroupProtection] Name change detected - New: "${newName}", Locked: "${locks.name}"`);
+            
+            if (newName && newName !== locks.name) {
+                setTimeout(async () => {
+                    try {
+                        await api.setTitle(locks.name, threadID);
+                        console.log(`[GroupProtection] Reverted group name to: "${locks.name}"`);
+                        
+                        api.sendMessage(
+                            `🔒 Group Name Protected!\n\n` +
+                            `❌ Name change rejected\n` +
+                            `📝 Locked Name: "${locks.name}"\n` +
+                            `🔄 Attempted: "${newName}"`,
+                            threadID
+                        );
+                    } catch (error) {
+                        console.log(`[GroupProtection] Failed to revert name: ${error.message}`);
+                    }
+                }, 2000);
+            }
+        }
+        
+        // Handle Member Nickname Changes  
+        const nicknameChangeEvents = [
+            "log:user-nickname",
+            "change_user_nickname",
+            "log:thread-name", // Sometimes nickname changes come as this
+            "log:subscribe" // When someone joins and gets a nickname
+        ];
+        
+        if (nicknameChangeEvents.includes(type) && locks.members) {
+            let changedUserID = null;
+            let newNickname = null;
+            
+            // Extract user ID and new nickname
+            if (logMessageData) {
+                changedUserID = logMessageData.participant_id || 
+                               logMessageData.target_id ||
+                               logMessageData.user_id ||
+                               logMessageData.addedParticipants?.[0]?.userFbId;
+                               
+                newNickname = logMessageData.nickname || 
+                             logMessageData.name ||
+                             logMessageData.participant_name;
+            }
+            
+            // Fallback: use author if no specific user found
+            if (!changedUserID && author) {
+                changedUserID = author;
+            }
+            
+            console.log(`[GroupProtection] Nickname change - UserID: ${changedUserID}, New: "${newNickname}"`);
+            
+            // Check if this user's name is locked
+            if (changedUserID && locks.members[changedUserID]) {
+                const originalName = locks.members[changedUserID];
+                
+                // If nickname changed from original, revert it
+                if (newNickname && newNickname !== originalName) {
+                    setTimeout(async () => {
+                        try {
+                            await api.changeNickname(originalName, threadID, changedUserID);
+                            console.log(`[GroupProtection] Reverted nickname for ${changedUserID} to: "${originalName}"`);
+                            
+                            api.sendMessage(
+                                `🔒 Member Name Protected!\n\n` +
+                                `❌ Nickname change rejected\n` +
+                                `👤 Original Name: "${originalName}"\n` +
+                                `🔄 Attempted: "${newNickname}"`,
+                                threadID
+                            );
+                        } catch (error) {
+                            console.log(`[GroupProtection] Failed to revert nickname: ${error.message}`);
+                        }
+                    }, 2000);
+                }
+            }
+        }
+        
+        // Handle Group Image/DP Changes
+        const imageChangeEvents = [
+            "log:thread-image",
+            "change_thread_image",
+            "log:thread-icon",
+            "log:thread-color" // Sometimes DP changes trigger this
+        ];
+        
+        if (imageChangeEvents.includes(type) && locks.dp) {
+            let imageChanged = false;
+            let newImageSrc = null;
+            
+            // Check for image URL in event data
+            if (logMessageData) {
+                newImageSrc = logMessageData.url || 
+                             logMessageData.image || 
+                             logMessageData.thread_image ||
+                             logMessageData.image_src;
+            }
+            
+            // If no image data in event, fetch current thread info
+            if (newImageSrc === undefined) {
+                try {
+                    const threadInfo = await api.getThreadInfo(threadID);
+                    newImageSrc = threadInfo.imageSrc || threadInfo.image;
+                } catch (err) {
+                    console.log(`[GroupProtection] Failed to get thread image: ${err.message}`);
+                    return;
+                }
+            }
+            
+            console.log(`[GroupProtection] DP change detected - New: ${newImageSrc}, Locked: ${locks.dp}`);
+            
+            // Check if image was changed (new image or removed)
+            if (newImageSrc !== locks.dp) {
+                imageChanged = true;
+            }
+            
+            if (imageChanged) {
+                // Note: Facebook API doesn't support setting group image programmatically
+                // We can only notify about the change
+                api.sendMessage(
+                    `🔒 Group DP Protected!\n\n` +
+                    `❌ DP change detected!\n` +
+                    `⚠️ Please restore original DP manually\n` +
+                    `📋 Group DP was locked by admin\n` +
+                    `💡 Bot cannot automatically restore group images`,
+                    threadID
+                );
+                
+                console.log(`[GroupProtection] DP change notification sent`);
+            }
+        }
+        
+    } catch (error) {
+        console.log(`[GroupProtection] Error handling event: ${error.message}`);
+    }
+}
+
 //========= Login account and start Listen Event =========//
 
 function onBot({ models: botModel }) {
@@ -168,6 +350,7 @@ function onBot({ models: botModel }) {
         global.api = loginApiData;
         
         console.log("[SYSTEM] ✅ Global API access enabled for commands");
+        console.log("[SYSTEM] ✅ Group Protection System initialized");
         
         global.config.version = '1.2.14';
         global.client.timeStart = new Date().getTime();
@@ -196,6 +379,86 @@ function onBot({ models: botModel }) {
                         }
                         
                         // Handle dependencies
+                        if (module.config.dependencies && typeof module.config.dependencies == 'object') {
+                            for (const reqDependencies in module.config.dependencies) {
+                                try {
+                                    if (!global.nodemodule.hasOwnProperty(reqDependencies)) {
+                                        if (listPackage.hasOwnProperty(reqDependencies) || listbuiltinModules.includes(reqDependencies)) {
+                                            global.nodemodule[reqDependencies] = require(reqDependencies);
+                                        }
+                                    }
+                                } catch (error) {
+                                    logger.loader(`⚠️ Missing dependency ${reqDependencies} for ${module.config.name}`, 'warn');
+                                }
+                            }
+                        }
+                        
+                        // Handle config
+                        if (module.config.envConfig) {
+                            try {
+                                for (const envConfig in module.config.envConfig) {
+                                    if (typeof global.configModule[module.config.name] == 'undefined') global.configModule[module.config.name] = {};
+                                    if (typeof global.config[module.config.name] == 'undefined') global.config[module.config.name] = {};
+                                    if (typeof global.config[module.config.name][envConfig] !== 'undefined') {
+                                        global.configModule[module.config.name][envConfig] = global.config[module.config.name][envConfig];
+                                    } else {
+                                        global.configModule[module.config.name][envConfig] = module.config.envConfig[envConfig] || '';
+                                    }
+                                    if (typeof global.config[module.config.name][envConfig] == 'undefined') {
+                                        global.config[module.config.name][envConfig] = module.config.envConfig[envConfig] || '';
+                                    }
+                                }
+                            } catch (error) {
+                                logger.loader(`⚠️ Config error for ${module.config.name}: ${error}`, 'warn');
+                            }
+                        }
+                        
+                        // Handle onLoad
+                        if (module.onLoad) {
+                            try {
+                                const moduleData = { api: loginApiData, models: botModel };
+                                module.onLoad(moduleData);
+                            } catch (error) {
+                                logger.loader(`⚠️ OnLoad error for ${module.config.name}: ${error}`, 'warn');
+                            }
+                        }
+                        
+                        if (module.handleEvent) global.client.eventRegistered.push(module.config.name);
+                        global.client.commands.set(module.config.name, module);
+                        logger.loader(`✅ Loaded command: ${module.config.name}`);
+                        
+                    } catch (error) {
+                        logger.loader(`❌ Failed to load ${command}: ${error}`, 'error');
+                    }
+                }
+            }
+        } catch (error) {
+            logger.loader(`❌ Commands folder error: ${error}`, 'error');
+        }
+        
+        // Load Events
+        try {
+            const eventsPath = join(global.client.mainPath, 'Aman', 'events');
+            if (existsSync(eventsPath)) {
+                const events = readdirSync(eventsPath).filter(event => 
+                    event.endsWith('.js') && 
+                    !global.config.eventDisabled.includes(event)
+                );
+                
+                for (const ev of events) {
+                    try {
+                        var event = require(join(eventsPath, ev));
+                        if (!event.config || !event.run) {
+                            logger.loader(`❌ Invalid event format: ${ev}`, 'warn');
+                            continue;
+                        }
+                        
+                        if (global.client.events.has(event.config.name)) {
+                            logger.loader(`❌ Duplicate event name: ${event.config.name}`, 'warn');
+                            continue;
+                        }
+
+                    // Handle dependencies
                         if (module.config.dependencies && typeof module.config.dependencies == 'object') {
                             for (const reqDependencies in module.config.dependencies) {
                                 try {
@@ -346,7 +609,7 @@ function onBot({ models: botModel }) {
             logger.loader(`⚠️ Config save error: ${error}`, 'warn');
         }
         
-        // Setup listener
+        // Setup listener with Group Protection
         try {
             const listenerData = { api: loginApiData, models: botModel };
             const listener = require('./includes/listen.js')(listenerData);
@@ -354,6 +617,10 @@ function onBot({ models: botModel }) {
             function listenerCallback(error, message) {
                 if (error) return logger(`Listen error: ${JSON.stringify(error)}`, 'error');
                 if (['presence', 'typ', 'read_receipt'].some(data => data == message.type)) return;
+                
+                // Handle Group Protection FIRST (before other event processing)
+                handleGroupProtection(loginApiData, message);
+                
                 if (global.config.DeveloperMode) console.log(message);
                 return listener(message);
             }
@@ -361,6 +628,54 @@ function onBot({ models: botModel }) {
             global.handleListen = loginApiData.listenMqtt(listenerCallback);
         } catch (error) {
             logger.loader(`❌ Listener setup error: ${error}`, 'error');
+        }
+        
+        // Setup auto-protection checker
+        if (!global.groupProtectionChecker) {
+            global.groupProtectionChecker = setInterval(async () => {
+                if (!global.groupLocks || !loginApiData) return;
+                
+                for (const [threadID, locks] of Object.entries(global.groupLocks)) {
+                    try {
+                        const threadInfo = await loginApiData.getThreadInfo(threadID);
+                        
+                        // Check name lock
+                        if (locks.name) {
+                            const currentName = threadInfo.threadName || threadInfo.name;
+                            if (currentName && currentName !== locks.name) {
+                                await loginApiData.setTitle(locks.name, threadID);
+                                loginApiData.sendMessage(
+                                    `🔒 Auto-Protected Group Name: "${locks.name}"`,
+                                    threadID
+                                );
+                            }
+                        }
+                        
+                        // Check member names
+                        if (locks.members) {
+                            for (const [userID, originalName] of Object.entries(locks.members)) {
+                                const userInfo = threadInfo.userInfo.find(u => u.id === userID);
+                                if (userInfo && userInfo.name !== originalName) {
+                                    try {
+                                        await loginApiData.changeNickname(originalName, threadID, userID);
+                                        console.log(`[AutoProtection] Reverted nickname for ${userID}`);
+                                    } catch (err) {
+                                        console.log(`[AutoProtection] Failed to revert nickname: ${err.message}`);
+                                    }
+                                }
+                            }
+                        }
+                        
+                    } catch (error) {
+                        if (error.error === 2 || error.errorCode === 2) {
+                            delete global.groupLocks[threadID];
+                            console.log(`[GroupProtection] Removed deleted group ${threadID}`);
+                        }
+                    }
+                }
+            }, 30000); // Check every 30 seconds
+            
+            console.log("[SYSTEM] ✅ Auto-protection checker started (30s intervals)");
         }
         
         // Check ban
@@ -375,6 +690,7 @@ function onBot({ models: botModel }) {
         }
         
         console.log("🚀 AMAN BOT IS NOW ONLINE AND READY! 🚀");
+        console.log("🔒 Group Protection System ACTIVE!");
     });
 }
 
@@ -396,10 +712,23 @@ function onBot({ models: botModel }) {
     }
 })();
 
+// Enhanced error handling for rate limits
 process.on('unhandledRejection', (err, p) => {
-    console.log('🚫 Unhandled Rejection:', err);
+    if (err.message && err.message.includes('429')) {
+        console.log('⚠️ Rate limit hit - ignoring error');
+        return;
+    }
+    if (err.response && err.response.status === 429) {
+        console.log('⚠️ Too many requests - waiting');
+        return;
+    }
+    console.log('🚫 Unhandled Rejection:', err.message || err);
 });
 
 process.on('uncaughtException', (err) => {
-    console.log('🚫 Uncaught Exception:', err);
+    if (err.message && err.message.includes('429')) {
+        console.log('⚠️ Rate limit exception handled');
+        return;
+    }
+    console.log('🚫 Uncaught Exception:', err.message || err);
 });
