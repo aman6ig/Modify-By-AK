@@ -1,6 +1,6 @@
 module.exports.config = {
     name: "grouplock",
-    version: "2.0.0",
+    version: "3.0.0",
     hasPermssion: 2, // Only Bot Admin
     credits: "Aman",
     description: "Complete group protection - lock name, member names & DP",
@@ -125,7 +125,7 @@ module.exports.run = async function({ api, event, args }) {
                 return api.sendMessage(
                     `🔒 **Group DP Locked!**\n\n` +
                     `🖼️ Current DP locked successfully\n` +
-                    `⚡ Ab koi bhi DP change karega toh automatic revert ho jayega!`,
+                    `⚡ Ab koi bhi DP change karega toh detection hoga aur notification milega!`,
                     threadID, messageID
                 );
                 
@@ -235,185 +235,236 @@ module.exports.run = async function({ api, event, args }) {
     }
 };
 
-// Enhanced event handler
+// Enhanced event handler with better detection
 module.exports.handleEvent = async function({ api, event }) {
-    const { threadID, senderID } = event;
+    const { threadID, senderID, type, logMessageData } = event;
     
     if (!global.groupLocks || !global.groupLocks[threadID]) return;
     
     const locks = global.groupLocks[threadID];
     
-    // Handle group name changes
-    const nameChangeEvents = [
-        "log:thread-name",
-        "change_thread_name", 
-        "log:thread-name-change",
-        "thread-name"
-    ];
+    console.log(`[GroupLock] Event detected: ${type} in thread ${threadID}`);
     
-    if (nameChangeEvents.includes(event.type) && locks.name) {
-        let newName;
+    try {
+        // Handle group name changes - ENHANCED
+        const nameChangeEvents = [
+            "log:thread-name",
+            "change_thread_name", 
+            "log:thread-name-change",
+            "thread-name"
+        ];
         
-        if (event.logMessageData) {
-            newName = event.logMessageData.name || 
-                     event.logMessageData.thread_name || 
-                     event.logMessageData.threadName;
-        } else if (event.threadName) {
-            newName = event.threadName;
-        }
-        
-        if (!newName) {
-            try {
-                const threadInfo = await api.getThreadInfo(threadID);
-                newName = threadInfo.threadName || threadInfo.name;
-            } catch (err) {
-                return;
-            }
-        }
-        
-        if (newName && newName !== locks.name) {
-            setTimeout(async () => {
-                try {
-                    await api.setTitle(locks.name, threadID);
-                    api.sendMessage(
-                        `🔒 **Group Name Protected!**\n\n` +
-                        `❌ Name change rejected\n` +
-                        `📝 Locked Name: "${locks.name}"\n` +
-                        `🔄 Attempted: "${newName}"`,
-                        threadID
-                    );
-                } catch (error) {
-                    console.log("[GroupLock] Name revert error:", error);
-                }
-            }, 2000);
-        }
-    }
-    
-    // Handle member name changes
-    const memberNameEvents = [
-        "log:user-nickname",
-        "change_user_nickname",
-        "log:thread-name"
-    ];
-    
-    if (memberNameEvents.includes(event.type) && locks.members) {
-        let changedUserID, newNickname;
-        
-        if (event.logMessageData) {
-            changedUserID = event.logMessageData.participant_id || 
-                           event.logMessageData.target_id ||
-                           event.logMessageData.user_id;
-            newNickname = event.logMessageData.nickname || 
-                         event.logMessageData.name;
-        }
-        
-        if (changedUserID && locks.members[changedUserID]) {
-            const originalName = locks.members[changedUserID];
+        if (nameChangeEvents.includes(type) && locks.name) {
+            console.log("[GroupLock] Group name change detected!");
             
-            if (newNickname && newNickname !== originalName) {
+            let newName;
+            
+            // Multiple ways to get new name
+            if (logMessageData) {
+                newName = logMessageData.name || 
+                         logMessageData.thread_name || 
+                         logMessageData.threadName ||
+                         logMessageData.title;
+            } else if (event.threadName) {
+                newName = event.threadName;
+            } else if (event.name) {
+                newName = event.name;
+            }
+            
+            // Fallback: fetch current name
+            if (!newName) {
+                try {
+                    const threadInfo = await api.getThreadInfo(threadID);
+                    newName = threadInfo.threadName || threadInfo.name;
+                } catch (err) {
+                    console.log("[GroupLock] Error fetching thread info:", err);
+                    return;
+                }
+            }
+            
+            console.log(`[GroupLock] New name: "${newName}", Locked name: "${locks.name}"`);
+            
+            if (newName && newName !== locks.name) {
+                console.log("[GroupLock] Names don't match - reverting!");
+                
                 setTimeout(async () => {
                     try {
-                        await api.changeNickname(originalName, threadID, changedUserID);
+                        await api.setTitle(locks.name, threadID);
                         api.sendMessage(
-                            `🔒 **Member Name Protected!**\n\n` +
-                            `❌ Nickname change rejected\n` +
-                            `👤 Original Name: "${originalName}"\n` +
-                            `🔄 Attempted: "${newNickname}"`,
+                            `🔒 **Group Name Protected!**\n\n` +
+                            `❌ Name change rejected\n` +
+                            `📝 Locked Name: "${locks.name}"\n` +
+                            `🔄 Attempted: "${newName}"\n` +
+                            `👤 Changed by: User`,
                             threadID
                         );
+                        console.log("[GroupLock] Name successfully reverted!");
                     } catch (error) {
-                        console.log("[GroupLock] Nickname revert error:", error);
+                        console.log("[GroupLock] Name revert error:", error);
+                        api.sendMessage(
+                            `⚠️ Group name lock active but cannot revert!\n` +
+                            `Bot ko admin permission do.`,
+                            threadID
+                        );
                     }
-                }, 2000);
+                }, 3000); // Increased delay for better reliability
             }
         }
-    }
-    
-    // Handle DP changes
-    const dpChangeEvents = [
-        "log:thread-image",
-        "change_thread_image",
-        "log:thread-icon"
-    ];
-    
-    if (dpChangeEvents.includes(event.type) && locks.dp) {
-        let newImageSrc;
         
-        if (event.logMessageData) {
-            newImageSrc = event.logMessageData.url || 
-                         event.logMessageData.image || 
-                         event.logMessageData.thread_image;
+        // Handle member name changes - ENHANCED
+        const memberNameEvents = [
+            "log:user-nickname",
+            "change_user_nickname",
+            "log:thread-name"
+        ];
+        
+        if (memberNameEvents.includes(type) && locks.members) {
+            console.log("[GroupLock] Member nickname change detected!");
+            
+            let changedUserID, newNickname;
+            
+            // Enhanced detection for member changes
+            if (logMessageData) {
+                changedUserID = logMessageData.participant_id || 
+                               logMessageData.target_id ||
+                               logMessageData.user_id ||
+                               logMessageData.author_id ||
+                               senderID; // Fallback to sender
+                               
+                newNickname = logMessageData.nickname || 
+                             logMessageData.name ||
+                             logMessageData.participant_name ||
+                             logMessageData.thread_name;
+            }
+            
+            // If still no user ID, check if sender changed their own name
+            if (!changedUserID && locks.members[senderID]) {
+                changedUserID = senderID;
+            }
+            
+            console.log(`[GroupLock] Changed user: ${changedUserID}, New nickname: "${newNickname}"`);
+            
+            if (changedUserID && locks.members[changedUserID]) {
+                const originalName = locks.members[changedUserID];
+                
+                // Get current name if not provided
+                if (!newNickname) {
+                    try {
+                        const threadInfo = await api.getThreadInfo(threadID);
+                        const userInfo = threadInfo.userInfo.find(u => u.id === changedUserID);
+                        if (userInfo) {
+                            newNickname = userInfo.name;
+                        }
+                    } catch (err) {
+                        console.log("[GroupLock] Error getting user info:", err);
+                        return;
+                    }
+                }
+                
+                console.log(`[GroupLock] Comparing: "${newNickname}" vs "${originalName}"`);
+                
+                if (newNickname && newNickname !== originalName) {
+                    console.log("[GroupLock] Member name changed - reverting!");
+                    
+                    setTimeout(async () => {
+                        try {
+                            await api.changeNickname(originalName, threadID, changedUserID);
+                            api.sendMessage(
+                                `🔒 **Member Name Protected!**\n\n` +
+                                `❌ Nickname change rejected\n` +
+                                `👤 Original Name: "${originalName}"\n` +
+                                `🔄 Attempted: "${newNickname}"\n` +
+                                `🔒 Member names are locked in this group!`,
+                                threadID
+                            );
+                            console.log("[GroupLock] Nickname successfully reverted!");
+                        } catch (error) {
+                            console.log("[GroupLock] Nickname revert error:", error);
+                            api.sendMessage(
+                                `⚠️ Member name lock active but cannot revert!\n` +
+                                `Bot ko admin permission do ya member manually restore kare.`,
+                                threadID
+                            );
+                        }
+                    }, 3000); // Increased delay
+                }
+            }
         }
         
-        // If DP was changed (new image or removed)
-        if (newImageSrc !== locks.dp) {
+        // Handle DP changes - ENHANCED
+        const dpChangeEvents = [
+            "log:thread-image",
+            "change_thread_image",
+            "log:thread-icon",
+            "log:thread-color"
+        ];
+        
+        if (dpChangeEvents.includes(type) && locks.dp) {
+            console.log("[GroupLock] Group DP change detected!");
+            
+            let newImageSrc;
+            
+            if (logMessageData) {
+                newImageSrc = logMessageData.url || 
+                             logMessageData.image || 
+                             logMessageData.thread_image ||
+                             logMessageData.image_src ||
+                             logMessageData.attachment_url;
+            }
+            
+            console.log(`[GroupLock] DP change detected: ${newImageSrc ? 'New image' : 'Image removed'}`);
+            
             setTimeout(async () => {
                 try {
-                    // Note: FB API doesn't support changing DP back automatically
-                    // We can only notify
                     api.sendMessage(
                         `🔒 **Group DP Protected!**\n\n` +
                         `❌ DP change detected!\n` +
+                        `🖼️ Original DP was locked by admin\n` +
                         `⚠️ Please restore original DP manually\n` +
-                        `📋 Original DP was locked by admin`,
+                        `📋 Bot cannot automatically revert DP changes\n` +
+                        `🔄 Use /grouplock unlock dp to remove DP lock`,
                         threadID
                     );
+                    console.log("[GroupLock] DP change notification sent!");
                 } catch (error) {
                     console.log("[GroupLock] DP notification error:", error);
                 }
             }, 2000);
         }
+        
+    } catch (error) {
+        console.log("[GroupLock] Event handler error:", error);
     }
 };
 
-// Enhanced load function
+// Enhanced load function with better auto-protection
 module.exports.onLoad = function() {
-    console.log("[GroupLock] Complete Group Protection System loaded!");
+    console.log("[GroupLock] Complete Group Protection System v3.0 loaded!");
     
-    // Enhanced auto-checker
+    // Enhanced auto-checker with better error handling
     if (!global.groupLockChecker) {
         global.groupLockChecker = setInterval(async () => {
             if (!global.groupLocks || !global.api) return;
+            
+            console.log(`[GroupLock] Auto-checker running... ${Object.keys(global.groupLocks).length} groups`);
             
             for (const [threadID, locks] of Object.entries(global.groupLocks)) {
                 try {
                     const threadInfo = await global.api.getThreadInfo(threadID);
                     
-                    // Check name lock
+                    // Check name lock with enhanced detection
                     if (locks.name) {
                         const currentName = threadInfo.threadName || threadInfo.name;
                         if (currentName && currentName !== locks.name) {
-                            await global.api.setTitle(locks.name, threadID);
-                            global.api.sendMessage(
-                                `🔒 **Auto-Protected Group Name**\n📝 "${locks.name}"`,
-                                threadID
-                            );
-                        }
-                    }
-                    
-                    // Check member names
-                    if (locks.members) {
-                        for (const [userID, originalName] of Object.entries(locks.members)) {
-                            const userInfo = threadInfo.userInfo.find(u => u.id === userID);
-                            if (userInfo && userInfo.name !== originalName) {
-                                try {
-                                    await global.api.changeNickname(originalName, threadID, userID);
-                                } catch (err) {
-                                    // Silent fail for nickname changes
-                                }
-                            }
-                        }
-                    }
-                    
-                } catch (error) {
-                    if (error.error === 2 || error.errorCode === 2) {
-                        delete global.groupLocks[threadID];
-                        console.log(`[GroupLock] Removed deleted group ${threadID}`);
-                    }
-                }
-            }
-        }, 20000); // Check every 20 seconds
-        
-        console.log("[GroupLock] Auto-protection checker started!");
-    }
-};
+                            console.log(`[GroupLock] Auto-correcting group name in ${threadID}`);
+                            
+                            try {
+                                await global.api.setTitle(locks.name, threadID);
+                                global.api.sendMessage(
+                                    `🔒 **Auto-Protected Group Name**\n` +
+                                    `📝 Restored: "${locks.name}"\n` +
+                                    `⚡ Automatic protection active!`,
+                                    threadID
+                                );
+                            } catch (setError) {
+                                console.log(`[Gro
