@@ -408,3 +408,22 @@ process.on('unhandledRejection', (err, p) => {
 process.on('uncaughtException', (err) => {
     console.log('🚫 Uncaught Exception:', err);
 });
+
+// Start the bot
+startBot();
+
+// =============================
+// Render Keep-Alive Server
+// =============================
+const express = require("express");
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Health check route (Render ko active rakhne ke liye)
+app.get("/", (req, res) => {
+  res.send("✅ Aman Bot is running fine!");
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});
