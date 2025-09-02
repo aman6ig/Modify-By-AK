@@ -409,9 +409,6 @@ process.on('uncaughtException', (err) => {
     console.log('🚫 Uncaught Exception:', err);
 });
 
-// Start the bot
-startBot();
-
 // =============================
 // Render Keep-Alive Server
 // =============================
