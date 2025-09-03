@@ -1,29 +1,225 @@
 {
   "language": "en",
+  "keyActive": "",
+  "DeveloperMode": false,
+  "autoCreateDB": true,
+  "notiGroup": true,
+  "NOTIFICATION": true,
+  "allowInbox": false,
+  "autoClean": true,
+  "commandDisabled": [],
+  "eventDisabled": [],
+  "EMAIL": "",
+  "PASSWORD": "",
+  "OTPKEY": "",
   "BOTNAME": "Testing",
   "PREFIX": ".",
   "ADMINBOT": ["100088677459075"],
   "NDH": ["100088677459075"],
-  "APPSTATEPATH": "Appstate.json",
   "DATABASE": {
     "sqlite": {
       "storage": "data.sqlite"
     }
   },
-  "gif": { "TENOR": "" },
-  "instagram": { "APIKEY": "" },
-  "math": { "WOLFRAM": "" },
-  "sauce": { "SAUCENAO_API": "" },
-  "shortlink": { "bitlyAPI": "" },
-  "soundcloud": { "SOUNDCLOUD_API": "" },
-  "weather": { "OPEN_WEATHER": "" },
-  "sim": { "APIKEY": "" },
-  "tiktok": { "API_KEY": "" },
-  "tikvd": { "API_KEY": "" },
-  "ifb": { "key": "", "token": "" },
-  "video": { "YOUTUBE_API": "" },
-  "music": { "YOUTUBE_API": "" },
-  "youtube": { "YOUTUBE_API": "" },
-  "ytb": { "YOUTUBE_API": "" },
-  "voice": { "zalo_apikey": "", "fpt_apikey": "" }
+  "APPSTATEPATH": "Appstate.json",
+  "FCAOption": {
+    "forceLogin": true,
+    "listenEvents": true,
+    "pauseLog": true,
+    "logLevel": "error",
+    "selfListen": false,
+    "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1"
+  },
+  "version": "1.2.14",
+  "caesar": {
+    "caeserPassword": "266303"
+  },
+  "cave": {
+    "cooldownTime": 2000000
+  },
+  "checktt": {
+    "maxColumn": 300
+  },
+  "daily": {
+    "cooldownTime": 43200000,
+    "rewardCoin": 1000
+  },
+  "diemdanh": {
+    "cooldownTime": 3000000
+  },
+  "gif": {
+    "TENOR": ""
+  },
+  "instagram": {
+    "APIKEY": ""
+  },
+  "math": {
+    "WOLFRAM": ""
+  },
+  "menu": {
+    "autoUnsend": true,
+    "delayUnsend": 55
+  },
+  "rankup": {
+    "autoUnsend": true,
+    "unsendMessageAfter": 10
+  },
+  "rname": {
+    "APIKEY": ""
+  },
+  "sauce": {
+    "SAUCENAO_API": ""
+  },
+  "shortlink": {
+    "bitlyAPI": ""
+  },
+  "soundcloud": {
+    "SOUNDCLOUD_API": ""
+  },
+  "surprise": {
+    "log": true,
+    "out": "",
+    "kickAll": "",
+    "delThread": ""
+  },
+  "weather": {
+    "OPEN_WEATHER": ""
+  },
+  "work": {
+    "cooldownTime": 1200000
+  },
+  "log": {
+    "enable": true
+  },
+  "fbcover": {
+    "APIKEY": ""
+  },
+  "help": {
+    "autoUnsend": true,
+    "delayUnsend": 120
+  },
+  "pokemon": {
+    "APIKEY": ""
+  },
+  "adminUpdate": {
+    "autoUnsend": true,
+    "sendNoti": true,
+    "timeToUnsend": 10
+  },
+  "sing": {
+    "API_KEY": "",
+    "YOUTUBE_API": "",
+    "SOUNDCLOUD_API": ""
+  },
+  "tiktok": {
+    "API_KEY": ""
+  },
+  "ghép": {
+    "APIKEY": ""
+  },
+  "adminOnly": false,
+  "cavevip": {
+    "cooldownTime": 1200000
+  },
+  "lixi": {
+    "cooldownTime": 1100000
+  },
+  "sim": {
+    "APIKEY": ""
+  },
+  "lamviec": {
+    "cooldownTime": 1200000
+  },
+  "xidach": {
+    "maxPlayers": 5,
+    "normalWinBonus": 1,
+    "superWinBonus": 2,
+    "epicWinBonus": 4
+  },
+  "tikvd": {
+    "API_KEY": ""
+  },
+  "loto": {
+    "maxPlayers": 10,
+    "getDelay": 8
+  },
+  "ndhOnly": false,
+  "ifb": {
+    "key": "",
+    "token": ""
+  },
+  "adminPaOnly": false,
+  "subnautica": {
+    "APIKEY": ""
+  },
+  "shortvd": {
+    "APIKEY": ""
+  },
+  "subnau": {
+    "APIKEY": ""
+  },
+  "video2": {
+    "YOUTUBE_API": ""
+  },
+  "nganhang": {
+    "key": ""
+  },
+  "video": {
+    "YOUTUBE_API": ""
+  },
+  "music": {
+    "YOUTUBE_API": ""
+  },
+  "mine": {
+    "APIKEY": ""
+  },
+  "youtube": {
+    "YOUTUBE_API": ""
+  },
+  "ytb": {
+    "YOUTUBE_API": ""
+  },
+  "voice": {
+    "zalo_apikey": "",
+    "fpt_apikey": ""
+  },
+  "anime": {
+    "cooldownTime": 1200000
+  },
+  "bannermkt": {
+    "APIKEY": ""
+  },
+  "radio": {
+    "YOUTUBE_API": ""
+  },
+  "mkt": {
+    "APIKEY": ""
+  },
+  "moon": {
+    "APIKEY": ""
+  },
+  "cardinfo": {
+    "APIKEY": ""
+  },
+  "help3": {
+    "autoUnsend": true,
+    "delayUnsend": 300
+  },
+  "job": {
+    "cooldownTime": 5000
+  },
+  "fish": {
+    "cooldownTime": 1000000
+  },
+  "sing2": {
+    "YOUTUBE_API": "",
+    "SOUNDCLOUD_API": ""
+  },
+  "god": {
+    "enable": true
+  },
+  "help2": {
+    "autoUnsend": true,
+    "delayUnsend": 300
+  }
 }
