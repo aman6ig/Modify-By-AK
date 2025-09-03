@@ -389,29 +389,30 @@ function onBot({ models: botModel }) {
         // Call the main listener for prefix commands
         listener(message);
         
-        // Handle NoPrefix events (handleEvent functions)
+        // Handle NoPrefix events (handleEvent functions) - Only from eventRegistered
         try {
-          // Check commands with handleEvent
-          global.client.commands.forEach((command) => {
-            if (command.handleEvent && typeof command.handleEvent === 'function') {
+          for (const eventName of global.client.eventRegistered) {
+            // Check commands first
+            const command = global.client.commands.get(eventName);
+            if (command && command.handleEvent && typeof command.handleEvent === 'function') {
               try {
                 command.handleEvent({ api: loginApiData, event: message, models: botModel });
               } catch (err) {
-                logger.loader(`❌ Error in command handleEvent ${command.config.name}: ${err}`, 'error');
+                logger.loader(`❌ Error in command handleEvent ${eventName}: ${err}`, 'error');
               }
+              continue; // Skip checking events if found in commands
             }
-          });
-          
-          // Check events with handleEvent
-          global.client.events.forEach((event) => {
-            if (event.handleEvent && typeof event.handleEvent === 'function') {
+            
+            // Check events if not found in commands
+            const event = global.client.events.get(eventName);
+            if (event && event.handleEvent && typeof event.handleEvent === 'function') {
               try {
                 event.handleEvent({ api: loginApiData, event: message, models: botModel });
               } catch (err) {
-                logger.loader(`❌ Error in event handleEvent ${event.config.name}: ${err}`, 'error');
+                logger.loader(`❌ Error in event handleEvent ${eventName}: ${err}`, 'error');
               }
             }
-          });
+          }
         } catch (error) {
           logger.loader(`❌ NoPrefix handler error: ${error}`, 'error');
         }
