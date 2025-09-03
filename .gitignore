@@ -9,4 +9,5 @@ config.json.temp
 LICENSE
 CONTRIBUTING.md
 Procfile
+.env
 README.md
