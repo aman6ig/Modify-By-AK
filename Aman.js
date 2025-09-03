@@ -1,6 +1,6 @@
 require("dotenv").config(); // Load .env first
 const moment = require("moment-timezone");
-const { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } = require("fs-extra");
+const { readdirSync, readFileSync, writeFileSync, existsSync } = require("fs-extra");
 const { join, resolve } = require("path");
 const logger = require("./utils/log.js");
 const login = require("fca-priyansh");
@@ -83,6 +83,10 @@ try {
     }
   }
   injectEnv(configValue);
+
+  // ✅ Ensure arrays exist
+  if (!Array.isArray(configValue.commandDisabled)) configValue.commandDisabled = [];
+  if (!Array.isArray(configValue.eventDisabled)) configValue.eventDisabled = [];
 
   global.config = configValue;
   writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
