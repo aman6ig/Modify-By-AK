@@ -1,46 +1,29 @@
 {
   "language": "en",
-  "DeveloperMode": true,
-  "autoCreateDB": true,
-  "notiGroup": true,
-  "allowInbox": false,
-  "autoClean": true,
-  "commandDisabled": ["sim.js"],
-  "eventDisabled": ["join.js"],
-
-  "BOTNAME": "${BOTNAME}",
-  "PREFIX": "${PREFIX}",
-  "ADMINBOT": ["${ADMINBOT}"],
-  "NDH": ["${NDH}"],
-  "APPSTATEPATH": "${APPSTATEPATH}",
-
+  "BOTNAME": "Testing",
+  "PREFIX": ".",
+  "ADMINBOT": ["100088677459075"],
+  "NDH": ["100088677459075"],
+  "APPSTATEPATH": "Appstate.json",
   "DATABASE": {
     "sqlite": {
       "storage": "data.sqlite"
     }
   },
-
-  "FCAOption": {
-    "forceLogin": true,
-    "listenEvents": true,
-    "pauseLog": true,
-    "logLevel": "error",
-    "selfListen": false,
-    "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X)"
-  },
-
-  "API_KEYS": {
-    "OPEN_WEATHER": "${OPEN_WEATHER_KEY}",
-    "INSTAGRAM": "${INSTAGRAM_KEY}",
-    "YOUTUBE": "${YOUTUBE_KEY}",
-    "SOUNDCLOUD": "${SOUNDCLOUD_KEY}",
-    "BITLY": "${BITLY_KEY}",
-    "SAUCENAO": "${SAUCENAO_KEY}",
-    "TIKTOK": "${TIKTOK_KEY}",
-    "TIKTOK_VIDEO": "${TIKTOK_VID_KEY}",
-    "TENOR": "${TENOR_KEY}",
-    "RNAME": "${RNAME_KEY}",
-    "IFB_KEY": "${IFB_KEY}",
-    "IFB_TOKEN": "${IFB_TOKEN}"
-  }
+  "gif": { "TENOR": "" },
+  "instagram": { "APIKEY": "" },
+  "math": { "WOLFRAM": "" },
+  "sauce": { "SAUCENAO_API": "" },
+  "shortlink": { "bitlyAPI": "" },
+  "soundcloud": { "SOUNDCLOUD_API": "" },
+  "weather": { "OPEN_WEATHER": "" },
+  "sim": { "APIKEY": "" },
+  "tiktok": { "API_KEY": "" },
+  "tikvd": { "API_KEY": "" },
+  "ifb": { "key": "", "token": "" },
+  "video": { "YOUTUBE_API": "" },
+  "music": { "YOUTUBE_API": "" },
+  "youtube": { "YOUTUBE_API": "" },
+  "ytb": { "YOUTUBE_API": "" },
+  "voice": { "zalo_apikey": "", "fpt_apikey": "" }
 }
