@@ -1,6 +1,6 @@
-require("dotenv").config(); // Load .env first
+require("dotenv").config();
 const moment = require("moment-timezone");
-const { readdirSync, readFileSync, writeFileSync, existsSync } = require("fs-extra");
+const { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } = require("fs-extra");
 const { join, resolve } = require("path");
 const logger = require("./utils/log.js");
 const login = require("fca-priyansh");
@@ -11,68 +11,89 @@ const listbuiltinModules = require("module").builtinModules;
 //========= Global Client & Data =========================//
 ////////////////////////////////////////////////////////////
 
-global.client = {
+global.client = new Object({
   commands: new Map(),
   events: new Map(),
   cooldowns: new Map(),
-  eventRegistered: [], // for noprefix events
-  handleSchedule: [],
-  handleReaction: [],
-  handleReply: [],
+  eventRegistered: new Array(),
+  handleSchedule: new Array(),
+  handleReaction: new Array(),
+  handleReply: new Array(),
   mainPath: process.cwd(),
-  configPath: "",
+  configPath: new String(),
   getTime: function (option) {
     const tz = "Asia/Kolkata";
     switch (option) {
-      case "seconds": return moment.tz(tz).format("ss");
-      case "minutes": return moment.tz(tz).format("mm");
-      case "hours": return moment.tz(tz).format("HH");
-      case "date": return moment.tz(tz).format("DD");
-      case "month": return moment.tz(tz).format("MM");
-      case "year": return moment.tz(tz).format("YYYY");
-      case "fullHour": return moment.tz(tz).format("HH:mm:ss");
-      case "fullYear": return moment.tz(tz).format("DD/MM/YYYY");
-      case "fullTime": return moment.tz(tz).format("HH:mm:ss DD/MM/YYYY");
+      case "seconds": return `${moment.tz(tz).format("ss")}`;
+      case "minutes": return `${moment.tz(tz).format("mm")}`;
+      case "hours": return `${moment.tz(tz).format("HH")}`;
+      case "date": return `${moment.tz(tz).format("DD")}`;
+      case "month": return `${moment.tz(tz).format("MM")}`;
+      case "year": return `${moment.tz(tz).format("YYYY")}`;
+      case "fullHour": return `${moment.tz(tz).format("HH:mm:ss")}`;
+      case "fullYear": return `${moment.tz(tz).format("DD/MM/YYYY")}`;
+      case "fullTime": return `${moment.tz(tz).format("HH:mm:ss DD/MM/YYYY")}`;
     }
   }
-};
+});
 
-global.data = {
+global.data = new Object({
   threadInfo: new Map(),
   threadData: new Map(),
   userName: new Map(),
   userBanned: new Map(),
   threadBanned: new Map(),
   commandBanned: new Map(),
-  threadAllowNSFW: [],
-  allUserID: [],
-  allCurrenciesID: [],
-  allThreadID: [],
+  threadAllowNSFW: new Array(),
+  allUserID: new Array(),
+  allCurrenciesID: new Array(),
+  allThreadID: new Array(),
   groupNameLock: new Map(),
   groupDpLock: new Map(),
   memberNameLock: new Map()
-};
+});
 
 global.utils = require("./utils/index.js");
-global.nodemodule = {};
-global.config = {};
-global.configModule = {};
-global.moduleData = [];
-global.language = {};
+global.nodemodule = new Object();
+global.config = new Object();
+global.configModule = new Object();
+global.moduleData = new Array();
+global.language = new Object();
+
+// Add missing checkBan function
+async function checkBan(api) {
+  try {
+    global.checkBan = true;
+    return true;
+  } catch (error) {
+    global.checkBan = false;
+    return false;
+  }
+}
 
 ////////////////////////////////////////////////////////////
 //========= Config Loader with .env Injection ============//
 ////////////////////////////////////////////////////////////
 
+var configValue;
 try {
   global.client.configPath = join(global.client.mainPath, "config.json");
-  let configValue = require(global.client.configPath);
+  configValue = require(global.client.configPath);
+  logger.loader("Found file config: config.json");
+} catch {
+  if (existsSync(global.client.configPath.replace(/\.json/g, "") + ".temp")) {
+    configValue = readFileSync(global.client.configPath.replace(/\.json/g, "") + ".temp");
+    configValue = JSON.parse(configValue);
+    logger.loader(`Found: ${global.client.configPath.replace(/\.json/g, "") + ".temp"}`);
+  } else return logger.loader("config.json not found!", "error");
+}
 
-  // Inject .env values
+try {
+  // Inject .env values into config
   function injectEnv(obj, parentKey = "") {
     for (const key in obj) {
       const fullKey = (parentKey ? parentKey + "_" : "") + key;
-      if (typeof obj[key] === "object" && obj[key] !== null) {
+      if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
         injectEnv(obj[key], fullKey);
       } else {
         const envKey = fullKey.toUpperCase();
@@ -84,46 +105,41 @@ try {
   }
   injectEnv(configValue);
 
-  // ✅ Ensure arrays exist
+  // Ensure arrays exist
   if (!Array.isArray(configValue.commandDisabled)) configValue.commandDisabled = [];
   if (!Array.isArray(configValue.eventDisabled)) configValue.eventDisabled = [];
 
-  global.config = configValue;
-  writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
+  for (const key in configValue) global.config[key] = configValue[key];
   logger.loader("Config Loaded with .env support!");
-} catch (err) {
-  logger.loader("config.json not found!", "error");
-  process.exit(1);
+} catch { 
+  return logger.loader("Can't load file config!", "error");
 }
+
+const { Sequelize, sequelize } = require("./includes/database/index.js");
+
+writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
 
 ////////////////////////////////////////////////////////////
 //========= Load Language ================================//
 ////////////////////////////////////////////////////////////
 
-try {
-  const langFile = readFileSync(
-    `${__dirname}/languages/${global.config.language || "en"}.lang`,
-    { encoding: "utf-8" }
-  ).split(/\r?\n|\r/);
-
-  const langData = langFile.filter(item => item.indexOf("#") != 0 && item != "");
-  for (const item of langData) {
-    const getSeparator = item.indexOf("=");
-    const itemKey = item.slice(0, getSeparator);
-    const itemValue = item.slice(getSeparator + 1);
-    const head = itemKey.slice(0, itemKey.indexOf("."));
-    const key = itemKey.replace(head + ".", "");
-    const value = itemValue.replace(/\\n/gi, "\n");
-    if (typeof global.language[head] == "undefined") global.language[head] = {};
-    global.language[head][key] = value;
-  }
-} catch (err) {
-  logger.loader("Language load failed, defaulting to en", "warn");
+const langFile = (readFileSync(`${__dirname}/languages/${global.config.language || "en"}.lang`, { encoding: "utf-8" })).split(/\r?\n|\r/);
+const langData = langFile.filter(item => item.indexOf("#") != 0 && item != "");
+for (const item of langData) {
+  const getSeparator = item.indexOf("=");
+  const itemKey = item.slice(0, getSeparator);
+  const itemValue = item.slice(getSeparator + 1, item.length);
+  const head = itemKey.slice(0, itemKey.indexOf("."));
+  const key = itemKey.replace(head + ".", "");
+  const value = itemValue.replace(/\\n/gi, "\n");
+  if (typeof global.language[head] == "undefined") global.language[head] = new Object();
+  global.language[head][key] = value;
 }
 
 global.getText = function (...args) {
   const langText = global.language;
   if (!langText.hasOwnProperty(args[0])) {
+    console.warn(`Language key not found: ${args[0]}`);
     return `Missing language key: ${args[0]}.${args[1]}`;
   }
   var text = langText[args[0]][args[1]] || `Missing text: ${args[0]}.${args[1]}`;
@@ -138,14 +154,13 @@ global.getText = function (...args) {
 //========= Appstate Load ================================//
 ////////////////////////////////////////////////////////////
 
-let appState = [];
-let appStateFile;
 try {
-  appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
-  appState = require(appStateFile);
-  logger.loader("Found appstate file");
+  var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
+  var appState = require(appStateFile);
+  logger.loader(global.getText("priyansh", "foundPathAppstate") || "Found appstate file");
 } catch {
-  logger.loader("AppState not found, continuing with empty state", "warn");
+  console.log("AppState file not found, but continuing...");
+  var appState = [];
 }
 
 ////////////////////////////////////////////////////////////
@@ -153,55 +168,111 @@ try {
 ////////////////////////////////////////////////////////////
 
 function onBot({ models: botModel }) {
-  login({ appState }, async (loginError, loginApiData) => {
-    if (loginError) return logger(JSON.stringify(loginError), "ERROR");
+  const loginData = {};
+  loginData['appState'] = appState;
+  
+  login(loginData, async (loginError, loginApiData) => {
+    if (loginError) return logger(JSON.stringify(loginError), `ERROR`);
 
-    if (global.config.FCAOption) loginApiData.setOptions(global.config.FCAOption);
-    if (appStateFile) writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, "\t"));
+    // Set options if available
+    if (global.config.FCAOption) {
+      loginApiData.setOptions(global.config.FCAOption);
+    }
 
+    writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, '\x09'));
+
+    // IMPORTANT: Make API globally accessible
     global.client.api = loginApiData;
     global.api = loginApiData;
-    logger.loader("✅ Global API access enabled");
 
-    global.config.version = "1.2.14";
-    global.client.timeStart = Date.now();
+    console.log("[SYSTEM] ✅ Global API access enabled for commands");
+
+    global.config.version = '1.2.14';
+    global.client.timeStart = new Date().getTime();
 
     ////////////////////////////////////////////////////////////
     //========= Load Commands ================================//
     ////////////////////////////////////////////////////////////
 
     try {
-      const commandsPath = join(global.client.mainPath, "Aman", "commands");
+      const commandsPath = join(global.client.mainPath, 'Aman', 'commands');
       if (existsSync(commandsPath)) {
-        const listCommand = readdirSync(commandsPath).filter(cmd =>
-          cmd.endsWith(".js") && !cmd.includes("example") && !global.config.commandDisabled.includes(cmd)
+        const listCommand = readdirSync(commandsPath).filter(command =>
+          command.endsWith('.js') &&
+          !command.includes('example') &&
+          !global.config.commandDisabled.includes(command)
         );
 
-        for (const cmd of listCommand) {
+        for (const command of listCommand) {
           try {
-            const module = require(join(commandsPath, cmd));
-            if (!module.config || !module.run) continue;
-            if (global.client.commands.has(module.config.name)) continue;
+            var module = require(join(commandsPath, command));
+            if (!module.config || !module.run) {
+              logger.loader(`❌ Invalid format: ${command}`, 'warn');
+              continue;
+            }
 
-            if (module.config.dependencies) {
-              for (const dep in module.config.dependencies) {
-                if (!global.nodemodule[dep]) {
-                  if (listPackage.hasOwnProperty(dep) || listbuiltinModules.includes(dep)) {
-                    global.nodemodule[dep] = require(dep);
+            if (global.client.commands.has(module.config.name)) {
+              logger.loader(`❌ Duplicate command name: ${module.config.name}`, 'warn');
+              continue;
+            }
+
+            // Handle dependencies
+            if (module.config.dependencies && typeof module.config.dependencies == 'object') {
+              for (const reqDependencies in module.config.dependencies) {
+                try {
+                  if (!global.nodemodule.hasOwnProperty(reqDependencies)) {
+                    if (listPackage.hasOwnProperty(reqDependencies) || listbuiltinModules.includes(reqDependencies)) {
+                      global.nodemodule[reqDependencies] = require(reqDependencies);
+                    }
                   }
+                } catch (error) {
+                  logger.loader(`⚠️ Missing dependency ${reqDependencies} for ${module.config.name}`, 'warn');
                 }
               }
             }
 
+            // Handle config
+            if (module.config.envConfig) {
+              try {
+                for (const envConfig in module.config.envConfig) {
+                  if (typeof global.configModule[module.config.name] == 'undefined') global.configModule[module.config.name] = {};
+                  if (typeof global.config[module.config.name] == 'undefined') global.config[module.config.name] = {};
+                  if (typeof global.config[module.config.name][envConfig] !== 'undefined') {
+                    global.configModule[module.config.name][envConfig] = global.config[module.config.name][envConfig];
+                  } else {
+                    global.configModule[module.config.name][envConfig] = module.config.envConfig[envConfig] || '';
+                  }
+                  if (typeof global.config[module.config.name][envConfig] == 'undefined') {
+                    global.config[module.config.name][envConfig] = module.config.envConfig[envConfig] || '';
+                  }
+                }
+              } catch (error) {
+                logger.loader(`⚠️ Config error for ${module.config.name}: ${error}`, 'warn');
+              }
+            }
+
+            // Handle onLoad
+            if (module.onLoad) {
+              try {
+                const moduleData = { api: loginApiData, models: botModel };
+                module.onLoad(moduleData);
+              } catch (error) {
+                logger.loader(`⚠️ OnLoad error for ${module.config.name}: ${error}`, 'warn');
+              }
+            }
+
+            // Register handleEvent for NoPrefix
+            if (module.handleEvent) global.client.eventRegistered.push(module.config.name);
             global.client.commands.set(module.config.name, module);
             logger.loader(`✅ Loaded command: ${module.config.name}`);
-          } catch (err) {
-            logger.loader(`❌ Command load failed (${cmd}): ${err}`, "error");
+
+          } catch (error) {
+            logger.loader(`❌ Failed to load ${command}: ${error}`, 'error');
           }
         }
       }
-    } catch (err) {
-      logger.loader(`❌ Commands folder error: ${err}`, "error");
+    } catch (error) {
+      logger.loader(`❌ Commands folder error: ${error}`, 'error');
     }
 
     ////////////////////////////////////////////////////////////
@@ -209,69 +280,157 @@ function onBot({ models: botModel }) {
     ////////////////////////////////////////////////////////////
 
     try {
-      const eventsPath = join(global.client.mainPath, "Aman", "events");
+      const eventsPath = join(global.client.mainPath, 'Aman', 'events');
       if (existsSync(eventsPath)) {
-        const events = readdirSync(eventsPath).filter(ev =>
-          ev.endsWith(".js") && !global.config.eventDisabled.includes(ev)
+        const events = readdirSync(eventsPath).filter(event =>
+          event.endsWith('.js') &&
+          !global.config.eventDisabled.includes(event)
         );
 
         for (const ev of events) {
           try {
-            const event = require(join(eventsPath, ev));
-            if (!event.config) continue;
-
-            // Normal event
-            if (event.run && !global.client.events.has(event.config.name)) {
-              global.client.events.set(event.config.name, event);
-              logger.loader(`✅ Loaded event: ${event.config.name}`);
+            var event = require(join(eventsPath, ev));
+            if (!event.config || !event.run) {
+              logger.loader(`❌ Invalid event format: ${ev}`, 'warn');
+              continue;
             }
 
-            // NoPrefix handler
-            if (event.handleEvent && typeof event.handleEvent === "function") {
-              global.client.eventRegistered.push(event.config.name);
-              global.client.events.set(event.config.name, event);
-              logger.loader(`✅ Loaded NoPrefix: ${event.config.name}`);
+            if (global.client.events.has(event.config.name)) {
+              logger.loader(`❌ Duplicate event name: ${event.config.name}`, 'warn');
+              continue;
             }
 
-          } catch (err) {
-            logger.loader(`❌ Event load failed (${ev}): ${err}`, "error");
+            // Handle dependencies
+            if (event.config.dependencies && typeof event.config.dependencies == 'object') {
+              for (const dependency in event.config.dependencies) {
+                try {
+                  if (!global.nodemodule.hasOwnProperty(dependency)) {
+                    if (listPackage.hasOwnProperty(dependency) || listbuiltinModules.includes(dependency)) {
+                      global.nodemodule[dependency] = require(dependency);
+                    }
+                  }
+                } catch (error) {
+                  logger.loader(`⚠️ Missing dependency ${dependency} for ${event.config.name}`, 'warn');
+                }
+              }
+            }
+
+            // Handle config
+            if (event.config.envConfig) {
+              try {
+                for (const envConfig in event.config.envConfig) {
+                  if (typeof global.configModule[event.config.name] == 'undefined') global.configModule[event.config.name] = {};
+                  if (typeof global.config[event.config.name] == 'undefined') global.config[event.config.name] = {};
+                  if (typeof global.config[event.config.name][envConfig] !== 'undefined') {
+                    global.configModule[event.config.name][envConfig] = global.config[event.config.name][envConfig];
+                  } else {
+                    global.configModule[event.config.name][envConfig] = event.config.envConfig[envConfig] || '';
+                  }
+                  if (typeof global.config[event.config.name][envConfig] == 'undefined') {
+                    global.config[event.config.name][envConfig] = event.config.envConfig[envConfig] || '';
+                  }
+                }
+              } catch (error) {
+                logger.loader(`⚠️ Config error for ${event.config.name}: ${error}`, 'warn');
+              }
+            }
+
+            // Handle onLoad
+            if (event.onLoad) {
+              try {
+                const eventData = { api: loginApiData, models: botModel };
+                event.onLoad(eventData);
+              } catch (error) {
+                logger.loader(`⚠️ OnLoad error for ${event.config.name}: ${error}`, 'warn');
+              }
+            }
+
+            // Register handleEvent for NoPrefix events
+            if (event.handleEvent) global.client.eventRegistered.push(event.config.name);
+            global.client.events.set(event.config.name, event);
+            logger.loader(`✅ Loaded event: ${event.config.name}`);
+
+          } catch (error) {
+            logger.loader(`❌ Failed to load event ${ev}: ${error}`, 'error');
           }
         }
       }
-    } catch (err) {
-      logger.loader(`❌ Events folder error: ${err}`, "error");
+    } catch (error) {
+      logger.loader(`❌ Events folder error: ${error}`, 'error');
     }
 
     logger.loader(`🎉 Loaded ${global.client.commands.size} commands and ${global.client.events.size} events`);
     logger.loader(`⚡ Startup Time: ${((Date.now() - global.client.timeStart) / 1000).toFixed()}s`);
-    logger.loader("===== [ AMAN BOT STARTED ] =====");
+    logger.loader('===== [ AMAN BOT STARTED ] =====');
 
-    // Listener
+    // Save config
+    try {
+      writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4), 'utf8');
+      if (existsSync(global.client.configPath + '.temp')) {
+        unlinkSync(global.client.configPath + '.temp');
+      }
+    } catch (error) {
+      logger.loader(`⚠️ Config save error: ${error}`, 'warn');
+    }
+
+    ////////////////////////////////////////////////////////////
+    //========= Setup Listener (Fixed for NoPrefix) ==========//
+    ////////////////////////////////////////////////////////////
+
     try {
       const listenerData = { api: loginApiData, models: botModel };
-      const listener = require("./includes/listen.js")(listenerData);
+      const listener = require('./includes/listen.js')(listenerData);
 
-      global.handleListen = loginApiData.listenMqtt((error, message) => {
-        if (error) return logger(`Listen error: ${JSON.stringify(error)}`, "error");
-        if (["presence", "typ", "read_receipt"].includes(message.type)) return;
+      function listenerCallback(error, message) {
+        if (error) return logger(`Listen error: ${JSON.stringify(error)}`, 'error');
+        if (['presence', 'typ', 'read_receipt'].some(data => data == message.type)) return;
         if (global.config.DeveloperMode) console.log(message);
-
-        // Prefix commands listener
+        
+        // Call the main listener for prefix commands
         listener(message);
-
-        // Noprefix / handleEvent listener
-        for (const [name, evModule] of global.client.events) {
-          if (evModule.handleEvent && typeof evModule.handleEvent === "function") {
-            try {
-              evModule.handleEvent({ api: loginApiData, event: message, models: botModel });
-            } catch (err) {
-              logger.loader(`❌ Error in NoPrefix ${name}: ${err}`, "error");
+        
+        // Handle NoPrefix events (handleEvent functions)
+        try {
+          // Check commands with handleEvent
+          global.client.commands.forEach((command) => {
+            if (command.handleEvent && typeof command.handleEvent === 'function') {
+              try {
+                command.handleEvent({ api: loginApiData, event: message, models: botModel });
+              } catch (err) {
+                logger.loader(`❌ Error in command handleEvent ${command.config.name}: ${err}`, 'error');
+              }
             }
-          }
+          });
+          
+          // Check events with handleEvent
+          global.client.events.forEach((event) => {
+            if (event.handleEvent && typeof event.handleEvent === 'function') {
+              try {
+                event.handleEvent({ api: loginApiData, event: message, models: botModel });
+              } catch (err) {
+                logger.loader(`❌ Error in event handleEvent ${event.config.name}: ${err}`, 'error');
+              }
+            }
+          });
+        } catch (error) {
+          logger.loader(`❌ NoPrefix handler error: ${error}`, 'error');
         }
-      });
-    } catch (err) {
-      logger.loader(`❌ Listener setup error: ${err}`, "error");
+      }
+
+      global.handleListen = loginApiData.listenMqtt(listenerCallback);
+    } catch (error) {
+      logger.loader(`❌ Listener setup error: ${error}`, 'error');
+    }
+
+    // Check ban
+    try {
+      await checkBan(loginApiData);
+    } catch (error) {
+      logger.loader(`⚠️ Ban check error: ${error}`, 'warn');
+    }
+
+    if (!global.checkBan) {
+      logger.loader('⚠️ Warning: Source code verification failed', 'warn');
     }
 
     console.log("🚀 AMAN BOT IS NOW ONLINE AND READY! 🚀");
@@ -284,16 +443,24 @@ function onBot({ models: botModel }) {
 
 (async () => {
   try {
-    const { Sequelize, sequelize } = require("./includes/database/index.js");
     await sequelize.authenticate();
-    const models = require("./includes/database/model.js")({ Sequelize, sequelize });
-    logger("✅ Database connected successfully", "[ DATABASE ]");
-    onBot({ models });
-  } catch (err) {
-    logger(`❌ Database connection failed: ${err}`, "[ DATABASE ]");
-    onBot({ models: null });
+    const authentication = { Sequelize, sequelize };
+    const models = require('./includes/database/model.js')(authentication);
+    logger('✅ Database connected successfully', '[ DATABASE ]');
+    const botData = { models };
+    onBot(botData);
+  } catch (error) {
+    logger(`❌ Database connection failed: ${JSON.stringify(error)}`, '[ DATABASE ]');
+    // Continue without database
+    const botData = { models: null };
+    onBot(botData);
   }
 })();
 
-process.on("unhandledRejection", (err) => console.log("🚫 Unhandled Rejection:", err));
-process.on("uncaughtException", (err) => console.log("🚫 Uncaught Exception:", err));
+process.on('unhandledRejection', (err, p) => {
+  console.log('🚫 Unhandled Rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.log('🚫 Uncaught Exception:', err);
+});
