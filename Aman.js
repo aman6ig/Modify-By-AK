@@ -261,8 +261,11 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Register handleEvent for NoPrefix
-            if (module.handleEvent) global.client.eventRegistered.push(module.config.name);
+            // FIXED: Only register in eventRegistered, NOT in events Map
+            if (module.handleEvent) {
+              global.client.eventRegistered.push(module.config.name);
+            }
+            
             global.client.commands.set(module.config.name, module);
             logger.loader(`✅ Loaded command: ${module.config.name}`);
 
@@ -276,7 +279,7 @@ function onBot({ models: botModel }) {
     }
 
     ////////////////////////////////////////////////////////////
-    //========= Load Events + NoPrefix ========================//
+    //========= Load Events (ONLY Normal Events) =============//
     ////////////////////////////////////////////////////////////
 
     try {
@@ -290,7 +293,7 @@ function onBot({ models: botModel }) {
         for (const ev of events) {
           try {
             var event = require(join(eventsPath, ev));
-            if (!event.config || !event.run) {
+            if (!event.config) {
               logger.loader(`❌ Invalid event format: ${ev}`, 'warn');
               continue;
             }
@@ -345,10 +348,22 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Register handleEvent for NoPrefix events
-            if (event.handleEvent) global.client.eventRegistered.push(event.config.name);
-            global.client.events.set(event.config.name, event);
-            logger.loader(`✅ Loaded event: ${event.config.name}`);
+            // FIXED: Only register handleEvent in eventRegistered array, 
+            // and DON'T add to events Map if it's NoPrefix
+            if (event.handleEvent && !event.run) {
+              // Pure NoPrefix event - only add to eventRegistered
+              global.client.eventRegistered.push(event.config.name);
+              logger.loader(`✅ Loaded NoPrefix event: ${event.config.name}`);
+            } else if (event.run) {
+              // Normal event with run function
+              global.client.events.set(event.config.name, event);
+              logger.loader(`✅ Loaded event: ${event.config.name}`);
+              
+              // If it also has handleEvent, add to eventRegistered
+              if (event.handleEvent) {
+                global.client.eventRegistered.push(event.config.name);
+              }
+            }
 
           } catch (error) {
             logger.loader(`❌ Failed to load event ${ev}: ${error}`, 'error');
@@ -374,7 +389,7 @@ function onBot({ models: botModel }) {
     }
 
     ////////////////////////////////////////////////////////////
-    //========= Setup Listener (Fixed for NoPrefix) ==========//
+    //========= Setup Listener (COMPLETELY FIXED) ============//
     ////////////////////////////////////////////////////////////
 
     try {
@@ -389,25 +404,41 @@ function onBot({ models: botModel }) {
         // Call the main listener for prefix commands
         listener(message);
         
-        // Handle NoPrefix events (handleEvent functions) - Only from eventRegistered
+        // FIXED: Handle NoPrefix events - avoid duplicates
         try {
+          const processedEvents = new Set(); // Track processed events
+          
           for (const eventName of global.client.eventRegistered) {
-            // Check commands first
+            if (processedEvents.has(eventName)) continue; // Skip if already processed
+            
+            // First check commands
             const command = global.client.commands.get(eventName);
             if (command && command.handleEvent && typeof command.handleEvent === 'function') {
               try {
                 command.handleEvent({ api: loginApiData, event: message, models: botModel });
+                processedEvents.add(eventName);
               } catch (err) {
                 logger.loader(`❌ Error in command handleEvent ${eventName}: ${err}`, 'error');
               }
-              continue; // Skip checking events if found in commands
+              continue;
             }
             
-            // Check events if not found in commands
-            const event = global.client.events.get(eventName);
-            if (event && event.handleEvent && typeof event.handleEvent === 'function') {
+            // Then check events (for pure NoPrefix events not in commands Map)
+            if (!processedEvents.has(eventName)) {
               try {
-                event.handleEvent({ api: loginApiData, event: message, models: botModel });
+                const eventPath = join(global.client.mainPath, 'Aman', 'events');
+                const eventFiles = readdirSync(eventPath);
+                
+                for (const file of eventFiles) {
+                  if (file.endsWith('.js')) {
+                    const eventModule = require(join(eventPath, file));
+                    if (eventModule.config && eventModule.config.name === eventName && eventModule.handleEvent) {
+                      eventModule.handleEvent({ api: loginApiData, event: message, models: botModel });
+                      processedEvents.add(eventName);
+                      break;
+                    }
+                  }
+                }
               } catch (err) {
                 logger.loader(`❌ Error in event handleEvent ${eventName}: ${err}`, 'error');
               }
