@@ -15,7 +15,7 @@ global.client = {
   commands: new Map(),
   events: new Map(),
   cooldowns: new Map(),
-  eventRegistered: [],
+  eventRegistered: [], // for noprefix events
   handleSchedule: [],
   handleReaction: [],
   handleReply: [],
@@ -205,7 +205,7 @@ function onBot({ models: botModel }) {
     }
 
     ////////////////////////////////////////////////////////////
-    //========= Load Events ==================================//
+    //========= Load Events + NoPrefix ========================//
     ////////////////////////////////////////////////////////////
 
     try {
@@ -218,11 +218,21 @@ function onBot({ models: botModel }) {
         for (const ev of events) {
           try {
             const event = require(join(eventsPath, ev));
-            if (!event.config || !event.run) continue;
-            if (global.client.events.has(event.config.name)) continue;
+            if (!event.config) continue;
 
-            global.client.events.set(event.config.name, event);
-            logger.loader(`✅ Loaded event: ${event.config.name}`);
+            // Normal event
+            if (event.run && !global.client.events.has(event.config.name)) {
+              global.client.events.set(event.config.name, event);
+              logger.loader(`✅ Loaded event: ${event.config.name}`);
+            }
+
+            // NoPrefix handler
+            if (event.handleEvent && typeof event.handleEvent === "function") {
+              global.client.eventRegistered.push(event.config.name);
+              global.client.events.set(event.config.name, event);
+              logger.loader(`✅ Loaded NoPrefix: ${event.config.name}`);
+            }
+
           } catch (err) {
             logger.loader(`❌ Event load failed (${ev}): ${err}`, "error");
           }
@@ -245,7 +255,20 @@ function onBot({ models: botModel }) {
         if (error) return logger(`Listen error: ${JSON.stringify(error)}`, "error");
         if (["presence", "typ", "read_receipt"].includes(message.type)) return;
         if (global.config.DeveloperMode) console.log(message);
-        return listener(message);
+
+        // Prefix commands listener
+        listener(message);
+
+        // Noprefix / handleEvent listener
+        for (const [name, evModule] of global.client.events) {
+          if (evModule.handleEvent && typeof evModule.handleEvent === "function") {
+            try {
+              evModule.handleEvent({ api: loginApiData, event: message, models: botModel });
+            } catch (err) {
+              logger.loader(`❌ Error in NoPrefix ${name}: ${err}`, "error");
+            }
+          }
+        }
       });
     } catch (err) {
       logger.loader(`❌ Listener setup error: ${err}`, "error");
