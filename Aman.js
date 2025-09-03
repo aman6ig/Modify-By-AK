@@ -1,11 +1,9 @@
 require("dotenv").config(); // Load .env first
 const moment = require("moment-timezone");
-const { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, rm } = require("fs-extra");
+const { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } = require("fs-extra");
 const { join, resolve } = require("path");
-const { execSync } = require("child_process");
 const logger = require("./utils/log.js");
 const login = require("fca-priyansh");
-const axios = require("axios");
 const listPackage = JSON.parse(readFileSync("./package.json")).dependencies;
 const listbuiltinModules = require("module").builtinModules;
 
@@ -63,15 +61,14 @@ global.moduleData = [];
 global.language = {};
 
 ////////////////////////////////////////////////////////////
-//========= Load Config ==================================//
+//========= Config Loader with .env Injection ============//
 ////////////////////////////////////////////////////////////
 
 try {
   global.client.configPath = join(global.client.mainPath, "config.json");
   let configValue = require(global.client.configPath);
-  logger.loader("Found file config: config.json");
 
-  // Inject .env values automatically
+  // Inject .env values
   function injectEnv(obj, parentKey = "") {
     for (const key in obj) {
       const fullKey = (parentKey ? parentKey + "_" : "") + key;
@@ -89,9 +86,9 @@ try {
 
   global.config = configValue;
   writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
-  logger.loader("Config Loaded with .env injection!");
+  logger.loader("Config Loaded with .env support!");
 } catch (err) {
-  logger.loader("config.json not found or invalid!", "error");
+  logger.loader("config.json not found!", "error");
   process.exit(1);
 }
 
@@ -117,12 +114,14 @@ try {
     global.language[head][key] = value;
   }
 } catch (err) {
-  logger.loader("Language file load failed, defaulting to en", "warn");
+  logger.loader("Language load failed, defaulting to en", "warn");
 }
 
 global.getText = function (...args) {
   const langText = global.language;
-  if (!langText.hasOwnProperty(args[0])) return `Missing language key: ${args[0]}.${args[1]}`;
+  if (!langText.hasOwnProperty(args[0])) {
+    return `Missing language key: ${args[0]}.${args[1]}`;
+  }
   var text = langText[args[0]][args[1]] || `Missing text: ${args[0]}.${args[1]}`;
   for (var i = args.length - 1; i > 0; i--) {
     const regEx = RegExp(`%${i}`, "g");
@@ -136,12 +135,13 @@ global.getText = function (...args) {
 ////////////////////////////////////////////////////////////
 
 let appState = [];
+let appStateFile;
 try {
-  const appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
+  appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
   appState = require(appStateFile);
   logger.loader("Found appstate file");
 } catch {
-  logger.loader("AppState file not found, continuing with empty state", "warn");
+  logger.loader("AppState not found, continuing with empty state", "warn");
 }
 
 ////////////////////////////////////////////////////////////
@@ -149,13 +149,11 @@ try {
 ////////////////////////////////////////////////////////////
 
 function onBot({ models: botModel }) {
-  const loginData = { appState };
-
-  login(loginData, async (loginError, loginApiData) => {
+  login({ appState }, async (loginError, loginApiData) => {
     if (loginError) return logger(JSON.stringify(loginError), "ERROR");
 
     if (global.config.FCAOption) loginApiData.setOptions(global.config.FCAOption);
-    writeFileSync(global.config.APPSTATEPATH, JSON.stringify(loginApiData.getAppState(), null, "\t"));
+    if (appStateFile) writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, "\t"));
 
     global.client.api = loginApiData;
     global.api = loginApiData;
@@ -171,15 +169,13 @@ function onBot({ models: botModel }) {
     try {
       const commandsPath = join(global.client.mainPath, "Aman", "commands");
       if (existsSync(commandsPath)) {
-        const listCommand = readdirSync(commandsPath).filter(command =>
-          command.endsWith(".js") &&
-          !command.includes("example") &&
-          !global.config.commandDisabled.includes(command)
+        const listCommand = readdirSync(commandsPath).filter(cmd =>
+          cmd.endsWith(".js") && !cmd.includes("example") && !global.config.commandDisabled.includes(cmd)
         );
 
-        for (const command of listCommand) {
+        for (const cmd of listCommand) {
           try {
-            const module = require(join(commandsPath, command));
+            const module = require(join(commandsPath, cmd));
             if (!module.config || !module.run) continue;
             if (global.client.commands.has(module.config.name)) continue;
 
@@ -196,7 +192,7 @@ function onBot({ models: botModel }) {
             global.client.commands.set(module.config.name, module);
             logger.loader(`✅ Loaded command: ${module.config.name}`);
           } catch (err) {
-            logger.loader(`❌ Failed to load ${command}: ${err}`, "error");
+            logger.loader(`❌ Command load failed (${cmd}): ${err}`, "error");
           }
         }
       }
@@ -212,8 +208,7 @@ function onBot({ models: botModel }) {
       const eventsPath = join(global.client.mainPath, "Aman", "events");
       if (existsSync(eventsPath)) {
         const events = readdirSync(eventsPath).filter(ev =>
-          ev.endsWith(".js") &&
-          !global.config.eventDisabled.includes(ev)
+          ev.endsWith(".js") && !global.config.eventDisabled.includes(ev)
         );
 
         for (const ev of events) {
@@ -225,7 +220,7 @@ function onBot({ models: botModel }) {
             global.client.events.set(event.config.name, event);
             logger.loader(`✅ Loaded event: ${event.config.name}`);
           } catch (err) {
-            logger.loader(`❌ Failed to load event ${ev}: ${err}`, "error");
+            logger.loader(`❌ Event load failed (${ev}): ${err}`, "error");
           }
         }
       }
