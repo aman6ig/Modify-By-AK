@@ -7,10 +7,6 @@ const login = require("fca-priyansh");
 const listPackage = JSON.parse(readFileSync("./package.json")).dependencies;
 const listbuiltinModules = require("module").builtinModules;
 
-////////////////////////////////////////////////////////////
-//========= Global Client & Data =========================//
-////////////////////////////////////////////////////////////
-
 global.client = new Object({
   commands: new Map(),
   events: new Map(),
@@ -60,10 +56,6 @@ global.configModule = new Object();
 global.moduleData = new Array();
 global.language = new Object();
 
-// Store all modules globally to avoid duplicate requires
-global.loadedModules = new Map();
-
-// Add missing checkBan function
 async function checkBan(api) {
   try {
     global.checkBan = true;
@@ -73,10 +65,6 @@ async function checkBan(api) {
     return false;
   }
 }
-
-////////////////////////////////////////////////////////////
-//========= Config Loader with .env Injection ============//
-////////////////////////////////////////////////////////////
 
 var configValue;
 try {
@@ -92,7 +80,6 @@ try {
 }
 
 try {
-  // Inject .env values into config
   function injectEnv(obj, parentKey = "") {
     for (const key in obj) {
       const fullKey = (parentKey ? parentKey + "_" : "") + key;
@@ -108,7 +95,6 @@ try {
   }
   injectEnv(configValue);
 
-  // Ensure arrays exist
   if (!Array.isArray(configValue.commandDisabled)) configValue.commandDisabled = [];
   if (!Array.isArray(configValue.eventDisabled)) configValue.eventDisabled = [];
 
@@ -119,12 +105,7 @@ try {
 }
 
 const { Sequelize, sequelize } = require("./includes/database/index.js");
-
 writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
-
-////////////////////////////////////////////////////////////
-//========= Load Language ================================//
-////////////////////////////////////////////////////////////
 
 const langFile = (readFileSync(`${__dirname}/languages/${global.config.language || "en"}.lang`, { encoding: "utf-8" })).split(/\r?\n|\r/);
 const langData = langFile.filter(item => item.indexOf("#") != 0 && item != "");
@@ -153,10 +134,6 @@ global.getText = function (...args) {
   return text;
 };
 
-////////////////////////////////////////////////////////////
-//========= Appstate Load ================================//
-////////////////////////////////////////////////////////////
-
 try {
   var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
   var appState = require(appStateFile);
@@ -166,10 +143,6 @@ try {
   var appState = [];
 }
 
-////////////////////////////////////////////////////////////
-//========= Bot Startup =================================//
-////////////////////////////////////////////////////////////
-
 function onBot({ models: botModel }) {
   const loginData = {};
   loginData['appState'] = appState;
@@ -177,26 +150,20 @@ function onBot({ models: botModel }) {
   login(loginData, async (loginError, loginApiData) => {
     if (loginError) return logger(JSON.stringify(loginError), `ERROR`);
 
-    // Set options if available
     if (global.config.FCAOption) {
       loginApiData.setOptions(global.config.FCAOption);
     }
 
     writeFileSync(appStateFile, JSON.stringify(loginApiData.getAppState(), null, '\x09'));
 
-    // IMPORTANT: Make API globally accessible
     global.client.api = loginApiData;
     global.api = loginApiData;
-
     console.log("[SYSTEM] ✅ Global API access enabled for commands");
 
     global.config.version = '1.2.14';
     global.client.timeStart = new Date().getTime();
 
-    ////////////////////////////////////////////////////////////
-    //========= Load Commands ================================//
-    ////////////////////////////////////////////////////////////
-
+    // Load Commands
     try {
       const commandsPath = join(global.client.mainPath, 'Aman', 'commands');
       if (existsSync(commandsPath)) {
@@ -209,17 +176,9 @@ function onBot({ models: botModel }) {
         for (const command of listCommand) {
           try {
             var module = require(join(commandsPath, command));
-            if (!module.config || !module.run) {
-              logger.loader(`❌ Invalid format: ${command}`, 'warn');
-              continue;
-            }
+            if (!module.config || !module.run) continue;
+            if (global.client.commands.has(module.config.name)) continue;
 
-            if (global.client.commands.has(module.config.name)) {
-              logger.loader(`❌ Duplicate command name: ${module.config.name}`, 'warn');
-              continue;
-            }
-
-            // Handle dependencies
             if (module.config.dependencies && typeof module.config.dependencies == 'object') {
               for (const reqDependencies in module.config.dependencies) {
                 try {
@@ -234,7 +193,6 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Handle config
             if (module.config.envConfig) {
               try {
                 for (const envConfig in module.config.envConfig) {
@@ -254,7 +212,6 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Handle onLoad
             if (module.onLoad) {
               try {
                 const moduleData = { api: loginApiData, models: botModel };
@@ -264,9 +221,8 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Store module globally and register handleEvent
-            global.loadedModules.set(module.config.name, module);
-            if (module.handleEvent) {
+            // CRITICAL: Only register in eventRegistered if handleEvent exists and not already registered
+            if (module.handleEvent && !global.client.eventRegistered.includes(module.config.name)) {
               global.client.eventRegistered.push(module.config.name);
             }
             
@@ -282,10 +238,7 @@ function onBot({ models: botModel }) {
       logger.loader(`❌ Commands folder error: ${error}`, 'error');
     }
 
-    ////////////////////////////////////////////////////////////
-    //========= Load Events ===================================//
-    ////////////////////////////////////////////////////////////
-
+    // Load Events  
     try {
       const eventsPath = join(global.client.mainPath, 'Aman', 'events');
       if (existsSync(eventsPath)) {
@@ -297,23 +250,9 @@ function onBot({ models: botModel }) {
         for (const ev of events) {
           try {
             var event = require(join(eventsPath, ev));
-            if (!event.config) {
-              logger.loader(`❌ Invalid event format: ${ev}`, 'warn');
-              continue;
-            }
+            if (!event.config || !event.run) continue;
+            if (global.client.events.has(event.config.name)) continue;
 
-            // Skip if already loaded as command
-            if (global.loadedModules.has(event.config.name)) {
-              logger.loader(`⚠️ Skipping duplicate: ${event.config.name} (already loaded as command)`, 'warn');
-              continue;
-            }
-
-            if (global.client.events.has(event.config.name)) {
-              logger.loader(`❌ Duplicate event name: ${event.config.name}`, 'warn');
-              continue;
-            }
-
-            // Handle dependencies
             if (event.config.dependencies && typeof event.config.dependencies == 'object') {
               for (const dependency in event.config.dependencies) {
                 try {
@@ -328,7 +267,6 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Handle config
             if (event.config.envConfig) {
               try {
                 for (const envConfig in event.config.envConfig) {
@@ -348,7 +286,6 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Handle onLoad
             if (event.onLoad) {
               try {
                 const eventData = { api: loginApiData, models: botModel };
@@ -358,22 +295,13 @@ function onBot({ models: botModel }) {
               }
             }
 
-            // Store module globally and handle registration
-            global.loadedModules.set(event.config.name, event);
-            
-            if (event.handleEvent && !event.run) {
-              // Pure NoPrefix event
+            // CRITICAL: Only register in eventRegistered if handleEvent exists and not already registered
+            if (event.handleEvent && !global.client.eventRegistered.includes(event.config.name)) {
               global.client.eventRegistered.push(event.config.name);
-              logger.loader(`✅ Loaded NoPrefix event: ${event.config.name}`);
-            } else if (event.run) {
-              // Normal event
-              global.client.events.set(event.config.name, event);
-              logger.loader(`✅ Loaded event: ${event.config.name}`);
-              
-              if (event.handleEvent) {
-                global.client.eventRegistered.push(event.config.name);
-              }
             }
+            
+            global.client.events.set(event.config.name, event);
+            logger.loader(`✅ Loaded event: ${event.config.name}`);
 
           } catch (error) {
             logger.loader(`❌ Failed to load event ${ev}: ${error}`, 'error');
@@ -398,10 +326,7 @@ function onBot({ models: botModel }) {
       logger.loader(`⚠️ Config save error: ${error}`, 'warn');
     }
 
-    ////////////////////////////////////////////////////////////
-    //========= Setup Listener (FINAL FIX) ===================//
-    ////////////////////////////////////////////////////////////
-
+    // FINAL LISTENER SETUP
     try {
       const listenerData = { api: loginApiData, models: botModel };
       const listener = require('./includes/listen.js')(listenerData);
@@ -411,23 +336,34 @@ function onBot({ models: botModel }) {
         if (['presence', 'typ', 'read_receipt'].some(data => data == message.type)) return;
         if (global.config.DeveloperMode) console.log(message);
         
-        // Call the main listener for prefix commands
+        // ONLY call main listener for prefix commands
         listener(message);
         
-        // Handle NoPrefix events using global loaded modules
-        try {
-          for (const eventName of global.client.eventRegistered) {
-            const module = global.loadedModules.get(eventName);
-            if (module && module.handleEvent && typeof module.handleEvent === 'function') {
-              try {
-                module.handleEvent({ api: loginApiData, event: message, models: botModel });
-              } catch (err) {
-                logger.loader(`❌ Error in handleEvent ${eventName}: ${err}`, 'error');
+        // Handle NoPrefix ONLY from commands/events that have handleEvent
+        // Use a single global flag to prevent double execution
+        if (!global.noPrefixProcessing) {
+          global.noPrefixProcessing = true;
+          
+          setTimeout(() => {
+            try {
+              for (const eventName of [...new Set(global.client.eventRegistered)]) {
+                const command = global.client.commands.get(eventName);
+                if (command && command.handleEvent) {
+                  command.handleEvent({ api: loginApiData, event: message, models: botModel });
+                  continue;
+                }
+                
+                const event = global.client.events.get(eventName);
+                if (event && event.handleEvent) {
+                  event.handleEvent({ api: loginApiData, event: message, models: botModel });
+                }
               }
+            } catch (error) {
+              console.log('NoPrefix error:', error);
             }
-          }
-        } catch (error) {
-          logger.loader(`❌ NoPrefix handler error: ${error}`, 'error');
+            
+            global.noPrefixProcessing = false;
+          }, 0);
         }
       }
 
@@ -436,7 +372,6 @@ function onBot({ models: botModel }) {
       logger.loader(`❌ Listener setup error: ${error}`, 'error');
     }
 
-    // Check ban
     try {
       await checkBan(loginApiData);
     } catch (error) {
@@ -451,10 +386,6 @@ function onBot({ models: botModel }) {
   });
 }
 
-////////////////////////////////////////////////////////////
-//========= Database Connection ==========================//
-////////////////////////////////////////////////////////////
-
 (async () => {
   try {
     await sequelize.authenticate();
@@ -465,7 +396,6 @@ function onBot({ models: botModel }) {
     onBot(botData);
   } catch (error) {
     logger(`❌ Database connection failed: ${JSON.stringify(error)}`, '[ DATABASE ]');
-    // Continue without database
     const botData = { models: null };
     onBot(botData);
   }
