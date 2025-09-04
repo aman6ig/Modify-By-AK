@@ -5,24 +5,20 @@ module.exports.config = {
 	credits: "Aman Khan",
 	description: "YouTube se video search karo aur download karo",
 	commandCategory: "media",
-	usages: "video [naam ya link]",
+	usages: "video [song name]",
 	cooldowns: 10,
 	dependencies: {
 		"ytdl-core": "",
-		"simple-youtube-api": "",
 		"fs-extra": "",
-		"axios": ""
+		"axios": "",
+		"yt-search": ""
 	}
 };
 
-// Packages ko script ke shuruwat mein hi require karo
 const ytdl = global.nodemodule["ytdl-core"];
 const fs = global.nodemodule["fs-extra"];
 const path = global.nodemodule["path"];
-const axios = global.nodemodule["axios"];
-
-// YouTube API key
-const YOUTUBE_API_KEY = "AIzaSyAgL7HjgtFLPJrAcVbKV2nGGyro9p7nQaI";
+const yts = global.nodemodule["yt-search"];
 
 module.exports.run = async function({ api, event, args }) {
 	const keyword = args.join(" ");
@@ -32,35 +28,20 @@ module.exports.run = async function({ api, event, args }) {
 	}
 	
 	try {
-		// Agar direct YouTube URL hai toh
-		if (ytdl.validateURL(keyword)) {
-			const videoInfo = await ytdl.getInfo(keyword);
-			const videoTitle = videoInfo.videoDetails.title;
-			
-			api.sendMessage(`⬇️ Downloading: ${videoTitle}...`, event.threadID, (err, info) => {
-				setTimeout(() => { api.unsendMessage(info.messageID) }, 10000);
-			});
-			
-			await downloadAndSendVideo(api, event, keyword);
-			return;
-		}
-		
-		// Search karo videos using YouTube API
 		api.sendMessage(`🔍 Searching "${keyword}" on YouTube...`, event.threadID, (err, info) => {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 5000);
 		});
+
+		// yt-search package use karte hain (API key ki zaroorat nahi)
+		const searchResults = await yts(keyword);
 		
-		// YouTube API se search karte hain
-		const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(keyword)}&key=${YOUTUBE_API_KEY}&type=video`;
-		const searchResponse = await axios.get(searchUrl);
-		
-		if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
+		if (!searchResults.videos || searchResults.videos.length === 0) {
 			return api.sendMessage("❌ Koi video nahi mila bhai...", event.threadID, event.messageID);
 		}
 		
-		const videos = searchResponse.data.items;
-		const links = videos.map(video => `https://www.youtube.com/watch?v=${video.id.videoId}`);
-		const titles = videos.map((video, index) => `${index + 1}. ${video.snippet.title}`);
+		const videos = searchResults.videos.slice(0, 5);
+		const links = videos.map(video => video.url);
+		const titles = videos.map((video, index) => `${index + 1}. ${video.title} (${video.timestamp})`);
 		
 		api.sendMessage(`🎬 Results for "${keyword}":\n\n${titles.join('\n')}\n\nReply with number (1-5) to download`, event.threadID, (error, info) => {
 			global.client.handleReply.push({
@@ -72,7 +53,7 @@ module.exports.run = async function({ api, event, args }) {
 		});
 		
 	} catch (error) {
-		console.error("Error in run function:", error);
+		console.error("Error:", error);
 		api.sendMessage("❌ Error aa gaya bhai, baad mein try karo.", event.threadID, event.messageID);
 	}
 };
@@ -87,10 +68,8 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
 	
 	try {
 		const videoUrl = handleReply.link[index];
-		const videoInfo = await ytdl.getInfo(videoUrl);
-		const videoTitle = videoInfo.videoDetails.title;
 		
-		api.sendMessage(`⬇️ Downloading: ${videoTitle}...`, event.threadID, (err, info) => {
+		api.sendMessage(`⬇️ Downloading video...`, event.threadID, (err, info) => {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 10000);
 		});
 		
