@@ -22,7 +22,7 @@ const path = global.nodemodule["path"];
 const axios = global.nodemodule["axios"];
 
 // YouTube API key (Yahan apni API key dalo)
-const YOUTUBE_API_KEY = "AIzaSyDBOpnGGz225cPwHlJQs8OMRtxOjSUm73I";
+const YOUTUBE_API_KEY = "AIzaSyAgL7HjgtFLPJrAcVbKV2nGGyro9p7nQaI";
 
 module.exports.run = async function({ api, event, args }) {
 	const keyword = args.join(" ");
