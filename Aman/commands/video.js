@@ -21,14 +21,14 @@ const fs = global.nodemodule["fs-extra"];
 const path = global.nodemodule["path"];
 const axios = global.nodemodule["axios"];
 
-// YouTube API key (Yahan apni API key dalo)
+// YouTube API key
 const YOUTUBE_API_KEY = "AIzaSyAgL7HjgtFLPJrAcVbKV2nGGyro9p7nQaI";
 
 module.exports.run = async function({ api, event, args }) {
 	const keyword = args.join(" ");
 	
 	if (!keyword) {
-		return api.sendMessage("❌ Koi keyword ya YouTube link dalo bhai...", event.threadID, event.messageID);
+		return api.sendMessage("❌ Koi song name dalo bhai...\nExample: .video Saiyara Song", event.threadID, event.messageID);
 	}
 	
 	try {
@@ -45,8 +45,8 @@ module.exports.run = async function({ api, event, args }) {
 			return;
 		}
 		
-		// Search karo videos using YouTube API directly
-		api.sendMessage(`🔍 "${keyword}" search kar raha hoon...`, event.threadID, (err, info) => {
+		// Search karo videos using YouTube API
+		api.sendMessage(`🔍 Searching "${keyword}" on YouTube...`, event.threadID, (err, info) => {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 5000);
 		});
 		
@@ -62,7 +62,7 @@ module.exports.run = async function({ api, event, args }) {
 		const links = videos.map(video => `https://www.youtube.com/watch?v=${video.id.videoId}`);
 		const titles = videos.map((video, index) => `${index + 1}. ${video.snippet.title}`);
 		
-		api.sendMessage(`🎬 Konsa video chahiye? Number reply karo:\n\n${titles.join('\n')}\n\n❌ Cancel karne ke liye kuch bhi mat type karo`, event.threadID, (error, info) => {
+		api.sendMessage(`🎬 Results for "${keyword}":\n\n${titles.join('\n')}\n\nReply with number (1-5) to download`, event.threadID, (error, info) => {
 			global.client.handleReply.push({
 				name: this.config.name,
 				messageID: info.messageID,
@@ -70,6 +70,7 @@ module.exports.run = async function({ api, event, args }) {
 				link: links
 			});
 		});
+		
 	} catch (error) {
 		console.error("Error in run function:", error);
 		api.sendMessage("❌ Error aa gaya bhai, baad mein try karo.", event.threadID, event.messageID);
@@ -106,9 +107,9 @@ async function downloadAndSendVideo(api, event, url) {
 		const videoTitle = videoInfo.videoDetails.title;
 		const videoDuration = parseInt(videoInfo.videoDetails.lengthSeconds);
 		
-		// 10 minutes se zyada lamba video nahi
-		if (videoDuration > 600) {
-			return api.sendMessage("❌ Video bahut lamba hai (max 10 minutes).", event.threadID, event.messageID);
+		// 5 minutes se zyada lamba video nahi
+		if (videoDuration > 300) {
+			return api.sendMessage("❌ Video bahut lamba hai (max 5 minutes).", event.threadID, event.messageID);
 		}
 		
 		const videoPath = path.join(__dirname, 'cache', `video_${Date.now()}.mp4`);
