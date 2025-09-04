@@ -12,14 +12,11 @@ module.exports.config = {
 };
 
 module.exports.handleEvent = async function ({ api, event }) {
-  const { threadID, messageID, body, senderID } = event;
+  const { threadID, messageID, body, senderID, messageReply } = event;
   if (!body || senderID == api.getCurrentUserID()) return;
 
   const lowerBody = body.toLowerCase();
   const isEmojiOnly = /^[\p{Emoji}\s]+$/u.test(body.trim());
-
-  // ❌ Block: agar "sony" aur "bot" dono ek sath ho to return kar do
-  if (lowerBody.includes("sony") && lowerBody.includes("bot")) return;
 
   try {
     api.setMessageReaction("🤖", messageID, () => {}, true);
@@ -63,8 +60,17 @@ Human girl style me jawab do, Ek real Girl ki tarah Jb koi Only Bot Bole to Flir
       reply = "Bot soch rahi hai... tum bahut interesting ho 💖";
     }
 
-    // 🔥 Owner Name Add kiya gaya
-    const finalMsg = `👤 ${userName}\n\n${reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
+    // 🔥 Unique Code System - Jab koi bot ke message ko reply kare
+    let uniqueCode = "";
+    if (messageReply && messageReply.senderID == api.getCurrentUserID()) {
+      // Generate unique code based on user ID and timestamp
+      const timestamp = Date.now();
+      const codeBase = senderID.toString() + timestamp.toString();
+      uniqueCode = `🆔 #${codeBase.substr(0, 6).toUpperCase()}`;
+    }
+
+    // 🔥 Final message with unique code if applicable
+    const finalMsg = `👤 ${userName}${uniqueCode ? ` ${uniqueCode}` : ''}\n\n${reply}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`;
 
     return api.sendMessage(finalMsg, threadID, messageID);
   } catch (error) {
@@ -77,10 +83,23 @@ Human girl style me jawab do, Ek real Girl ki tarah Jb koi Only Bot Bole to Flir
       "Chalo mai tumhe ek smile bhejti hu 🙂✨",
     ];
     const random = backupReplies[Math.floor(Math.random() * backupReplies.length)];
-    return api.sendMessage(`${random}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`, threadID, messageID);
+    
+    // Unique code for error messages too if it was a reply to bot
+    let uniqueCode = "";
+    if (event.messageReply && event.messageReply.senderID == api.getCurrentUserID()) {
+      const timestamp = Date.now();
+      const codeBase = senderID.toString() + timestamp.toString();
+      uniqueCode = `🆔 #${codeBase.substr(0, 6).toUpperCase()}`;
+    }
+    
+    return api.sendMessage(`${random}${uniqueCode ? ` ${uniqueCode}` : ''}\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`, threadID, messageID);
   }
 };
 
-module.exports.run = async function () {
+module.exports.run = async function ({ api, event, args }) {
+  // Agar koi directly command use kare to help message show kare
+  if (args.length === 0) {
+    return api.sendMessage(`🤖 Bot Commands:\n\n• Just type "bot" in your message\n• Send only emojis\n• Reply to my messages\n\n*★᭄𝐎𝐰𝐧𝐞𝐫 𝐀 𝐊 ⚔️⏤͟͟͞͞★*`, event.threadID, event.messageID);
+  }
   return;
 };
