@@ -116,6 +116,8 @@
       "youtubei.js": "^1.4.5",
       "yt-search": "^2.10.4",
       "ytdl-core": "^4.11.2",
-      "zalgo": "0.0.1"
+      "zalgo": "0.0.1",
+    "yt-search": "^2.13.1",
+    "ytdl-core": "^4.11.5"
   }
 }
