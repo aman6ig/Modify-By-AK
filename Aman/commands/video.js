@@ -1,3 +1,5 @@
+const axios = require("axios");
+
 module.exports.config = {
 	name: "video",
 	version: "1.0.0",
@@ -24,8 +26,8 @@ const YouTube = global.nodemodule["simple-youtube-api"];
 const fs = global.nodemodule["fs-extra"];
 const path = global.nodemodule["path"];
 
-// Direct API key use karo config se
-const YOUTUBE_API_KEY = module.exports.config.envConfig.YOUTUBE_API;
+// Direct API key use karo
+const YOUTUBE_API_KEY = "AIzaSyDBOpnGGz225cPwHlJQs8OMRtxOjSUm73I"; // Yahan direct API key daldo
 const youtube = new YouTube(YOUTUBE_API_KEY);
 
 module.exports.run = async function({ api, event, args }) {
