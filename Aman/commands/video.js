@@ -1,5 +1,3 @@
-const axios = require("axios");
-
 module.exports.config = {
 	name: "video",
 	version: "1.0.0",
@@ -14,21 +12,17 @@ module.exports.config = {
 		"simple-youtube-api": "",
 		"fs-extra": "",
 		"axios": ""
-	},
-	envConfig: {
-		"YOUTUBE_API": "AIzaSyDBOpnGGz225cPwHlJQs8OMRtxOjSUm73I"
-	}	
+	}
 };
 
 // Packages ko script ke shuruwat mein hi require karo
 const ytdl = global.nodemodule["ytdl-core"];
-const YouTube = global.nodemodule["simple-youtube-api"];
 const fs = global.nodemodule["fs-extra"];
 const path = global.nodemodule["path"];
+const axios = global.nodemodule["axios"];
 
-// Direct API key use karo
-const YOUTUBE_API_KEY = "AIzaSyDBOpnGGz225cPwHlJQs8OMRtxOjSUm73I"; // Yahan direct API key daldo
-const youtube = new YouTube(YOUTUBE_API_KEY);
+// YouTube API key (Yahan apni API key dalo)
+const YOUTUBE_API_KEY = "AIzaSyDBOpnGGz225cPwHlJQs8OMRtxOjSUm73I";
 
 module.exports.run = async function({ api, event, args }) {
 	const keyword = args.join(" ");
@@ -51,18 +45,22 @@ module.exports.run = async function({ api, event, args }) {
 			return;
 		}
 		
-		// Search karo videos
+		// Search karo videos using YouTube API directly
 		api.sendMessage(`🔍 "${keyword}" search kar raha hoon...`, event.threadID, (err, info) => {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 5000);
 		});
 		
-		const results = await youtube.searchVideos(keyword, 5);
-		if (results.length === 0) {
+		// YouTube API se search karte hain
+		const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(keyword)}&key=${YOUTUBE_API_KEY}&type=video`;
+		const searchResponse = await axios.get(searchUrl);
+		
+		if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
 			return api.sendMessage("❌ Koi video nahi mila bhai...", event.threadID, event.messageID);
 		}
 		
-		const links = results.map(video => video.url);
-		const titles = results.map((video, index) => `${index + 1}. ${video.title}`);
+		const videos = searchResponse.data.items;
+		const links = videos.map(video => `https://www.youtube.com/watch?v=${video.id.videoId}`);
+		const titles = videos.map((video, index) => `${index + 1}. ${video.snippet.title}`);
 		
 		api.sendMessage(`🎬 Konsa video chahiye? Number reply karo:\n\n${titles.join('\n')}\n\n❌ Cancel karne ke liye kuch bhi mat type karo`, event.threadID, (error, info) => {
 			global.client.handleReply.push({
