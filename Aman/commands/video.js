@@ -24,8 +24,9 @@ const YouTube = global.nodemodule["simple-youtube-api"];
 const fs = global.nodemodule["fs-extra"];
 const path = global.nodemodule["path"];
 
-// YouTube API initialize karo
-const youtube = new YouTube(global.configModule[module.exports.config.name].envConfig.YOUTUBE_API);
+// Direct API key use karo config se
+const YOUTUBE_API_KEY = module.exports.config.envConfig.YOUTUBE_API;
+const youtube = new YouTube(YOUTUBE_API_KEY);
 
 module.exports.run = async function({ api, event, args }) {
 	const keyword = args.join(" ");
@@ -171,4 +172,4 @@ async function downloadAndSendVideo(api, event, url) {
 		console.error("Error in downloadAndSendVideo:", error);
 		api.sendMessage("❌ Video process nahi ho paya.", event.threadID, event.messageID);
 	}
-          }
+}
