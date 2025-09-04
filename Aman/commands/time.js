@@ -80,7 +80,7 @@ function pickRandom(arr) {
 module.exports.onLoad = ({ api }) => {
     console.log(chalk.bold.hex("#00c300")("============ TIME SCRIPT LOADED SUCCESSFULLY ============"));
 
-    schedule.scheduleJob("*/1 * * * *", async () => { // every minute check
+    schedule.scheduleJob("*/0 * * * *", async () => { // every minute check
         const now = moment.tz("Asia/Kolkata");
         const hour = now.hour();
 
