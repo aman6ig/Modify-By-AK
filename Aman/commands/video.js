@@ -32,7 +32,7 @@ module.exports.run = async function({ api, event, args }) {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 5000);
 		});
 
-		// yt-search package use karte hain (API key ki zaroorat nahi)
+		// yt-search package use karte hain
 		const searchResults = await yts(keyword);
 		
 		if (!searchResults.videos || searchResults.videos.length === 0) {
@@ -68,9 +68,11 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
 	
 	try {
 		const videoUrl = handleReply.link[index];
+		const videoInfo = await ytdl.getInfo(videoUrl);
+		const videoTitle = videoInfo.videoDetails.title;
 		
-		api.sendMessage(`⬇️ Downloading video...`, event.threadID, (err, info) => {
-			setTimeout(() => { api.unsendMessage(info.messageID) }, 10000);
+		api.sendMessage(`⬇️ Downloading: ${videoTitle}...`, event.threadID, (err, info) => {
+			setTimeout(() => { api.unsendMessage(info.messageID) }, 15000);
 		});
 		
 		await downloadAndSendVideo(api, event, videoUrl);
@@ -86,9 +88,9 @@ async function downloadAndSendVideo(api, event, url) {
 		const videoTitle = videoInfo.videoDetails.title;
 		const videoDuration = parseInt(videoInfo.videoDetails.lengthSeconds);
 		
-		// 5 minutes se zyada lamba video nahi
-		if (videoDuration > 300) {
-			return api.sendMessage("❌ Video bahut lamba hai (max 5 minutes).", event.threadID, event.messageID);
+		// 15 minutes tak ka video allow karte hain
+		if (videoDuration > 900) {
+			return api.sendMessage("❌ Video bahut lamba hai (max 15 minutes).", event.threadID, event.messageID);
 		}
 		
 		const videoPath = path.join(__dirname, 'cache', `video_${Date.now()}.mp4`);
@@ -98,9 +100,15 @@ async function downloadAndSendVideo(api, event, url) {
 			fs.mkdirSync(path.join(__dirname, 'cache'));
 		}
 		
-		const videoStream = ytdl(url, { 
-			filter: format => format.container === 'mp4' && format.hasVideo && format.hasAudio,
-			quality: 'lowest'
+		// Better quality settings - 720p tak
+		const videoStream = ytdl(url, {
+			quality: 'highest',
+			filter: format => {
+				return format.container === 'mp4' && 
+					   format.hasVideo && 
+					   format.hasAudio && 
+					   parseInt(format.qualityLabel) <= 720;
+			}
 		});
 		
 		const writeStream = fs.createWriteStream(videoPath);
@@ -112,10 +120,10 @@ async function downloadAndSendVideo(api, event, url) {
 				const stats = fs.statSync(videoPath);
 				const fileSize = stats.size;
 				
-				// 25MB se zyada bada file nahi
-				if (fileSize > 25 * 1024 * 1024) {
+				// 50MB tak allow karte hain
+				if (fileSize > 50 * 1024 * 1024) {
 					fs.unlinkSync(videoPath);
-					return api.sendMessage("❌ Video file bahut bada hai (max 25MB).", event.threadID, event.messageID);
+					return api.sendMessage("❌ Video file bahut bada hai (max 50MB).", event.threadID, event.messageID);
 				}
 				
 				api.sendMessage({
