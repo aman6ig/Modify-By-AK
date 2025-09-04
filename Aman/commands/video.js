@@ -3,7 +3,7 @@ module.exports.config = {
 	version: "1.0.0",
 	hasPermssion: 0,
 	credits: "Aman Khan",
-	description: "YouTube se video search karo aur download karo",
+	description: "YouTube se video download karo",
 	commandCategory: "media",
 	usages: "video [song name]",
 	cooldowns: 10,
@@ -53,8 +53,8 @@ module.exports.run = async function({ api, event, args }) {
 		});
 		
 	} catch (error) {
-		console.error("Error:", error);
-		api.sendMessage("❌ Error aa gaya bhai, baad mein try karo.", event.threadID, event.messageID);
+		console.error("Search Error:", error);
+		api.sendMessage("❌ Search mein error aa gaya bhai.", event.threadID, event.messageID);
 	}
 };
 
@@ -68,47 +68,41 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
 	
 	try {
 		const videoUrl = handleReply.link[index];
-		const videoInfo = await ytdl.getInfo(videoUrl);
-		const videoTitle = videoInfo.videoDetails.title;
 		
-		api.sendMessage(`⬇️ Downloading: ${videoTitle}...`, event.threadID, (err, info) => {
+		api.sendMessage(`⬇️ Downloading video...`, event.threadID, (err, info) => {
 			setTimeout(() => { api.unsendMessage(info.messageID) }, 15000);
 		});
 		
 		await downloadAndSendVideo(api, event, videoUrl);
 	} catch (error) {
-		console.error("Error in handleReply:", error);
+		console.error("Download Error:", error);
 		api.sendMessage("❌ Video download nahi ho paya.", event.threadID, event.messageID);
 	}
 };
 
 async function downloadAndSendVideo(api, event, url) {
+	let videoPath;
 	try {
 		const videoInfo = await ytdl.getInfo(url);
 		const videoTitle = videoInfo.videoDetails.title;
 		const videoDuration = parseInt(videoInfo.videoDetails.lengthSeconds);
 		
-		// 15 minutes tak ka video allow karte hain
-		if (videoDuration > 900) {
-			return api.sendMessage("❌ Video bahut lamba hai (max 15 minutes).", event.threadID, event.messageID);
+		// 10 minutes tak ka video allow karte hain
+		if (videoDuration > 600) {
+			return api.sendMessage("❌ Video bahut lamba hai (max 10 minutes).", event.threadID, event.messageID);
 		}
 		
-		const videoPath = path.join(__dirname, 'cache', `video_${Date.now()}.mp4`);
+		videoPath = path.join(__dirname, 'cache', `video_${Date.now()}.mp4`);
 		
 		// Cache folder banayein agar nahi hai toh
 		if (!fs.existsSync(path.join(__dirname, 'cache'))) {
 			fs.mkdirSync(path.join(__dirname, 'cache'));
 		}
 		
-		// Better quality settings - 720p tak
+		// MP4 format mein best quality ke liye
 		const videoStream = ytdl(url, {
-			quality: 'highest',
-			filter: format => {
-				return format.container === 'mp4' && 
-					   format.hasVideo && 
-					   format.hasAudio && 
-					   parseInt(format.qualityLabel) <= 720;
-			}
+			quality: 'lowest', // Lowest quality for smaller size
+			filter: format => format.container === 'mp4' && format.hasVideo && format.hasAudio
 		});
 		
 		const writeStream = fs.createWriteStream(videoPath);
@@ -120,10 +114,10 @@ async function downloadAndSendVideo(api, event, url) {
 				const stats = fs.statSync(videoPath);
 				const fileSize = stats.size;
 				
-				// 50MB tak allow karte hain
-				if (fileSize > 50 * 1024 * 1024) {
+				// 25MB tak allow karte hain
+				if (fileSize > 25 * 1024 * 1024) {
 					fs.unlinkSync(videoPath);
-					return api.sendMessage("❌ Video file bahut bada hai (max 50MB).", event.threadID, event.messageID);
+					return api.sendMessage("❌ Video file bahut bada hai (max 25MB).", event.threadID, event.messageID);
 				}
 				
 				api.sendMessage({
@@ -141,23 +135,23 @@ async function downloadAndSendVideo(api, event, url) {
 				}, event.messageID);
 				
 			} catch (error) {
-				console.error("Error in file processing:", error);
+				console.error("File Processing Error:", error);
 				api.sendMessage("❌ Video send karne mein error aa gaya.", event.threadID, event.messageID);
 			}
 		});
 		
 		videoStream.on('error', (error) => {
-			console.error("Download error:", error);
-			api.sendMessage("❌ Video download nahi ho paya.", event.threadID, event.messageID);
+			console.error("Stream Error:", error);
+			api.sendMessage("❌ Video stream mein error aa gaya.", event.threadID, event.messageID);
 		});
 		
 		writeStream.on('error', (error) => {
-			console.error("Write error:", error);
+			console.error("Write Error:", error);
 			api.sendMessage("❌ File save nahi ho payi.", event.threadID, event.messageID);
 		});
 		
 	} catch (error) {
-		console.error("Error in downloadAndSendVideo:", error);
-		api.sendMessage("❌ Video process nahi ho paya.", event.threadID, event.messageID);
+		console.error("Download Function Error:", error);
+		api.sendMessage("❌ Video download process mein error aa gaya.", event.threadID, event.messageID);
 	}
 }
